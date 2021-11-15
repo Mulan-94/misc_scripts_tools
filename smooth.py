@@ -1,38 +1,37 @@
+#! /bin/python3
+import argparse
 import os
 import re
 import logging
-import dask.array as da
 import numpy as np
 
 from astropy.io import fits
 from glob import glob
 from casacore.tables import table
-from dask import compute, delayed
 
+logging.basicConfig()
 snitch = logging.getLogger("sade")
 snitch.setLevel(logging.INFO)
 
-"""
-with data from
-rsync -aHP andati@garfunkel.ru.ac.za:/home/andati/pica/reduction/output/continuum/34-with-polcal-kunislope/rotated-ms-rotated-model/fullms/*
-"""
 
-# CDELT#, CUNIT#, CRPIX#, CRVAL#
-# cdelt is the step size change, cunit: unit of the values, crpix: center pixel,
-# crval: center value for the dimension.
-
-# with a context manager we can do
-# with fits.open(im_list[0], readonly=True) as hdul:
-#     hdul.info()
-
-# the MS reference freq
-REF_FREQ = 1284000000.0
-
-#number of output channels
-BANDS_OUT = 32
-
-#polynomial order
-POLY_ORDER = 4
+def get_arguments():
+    parser = argparse.ArgumentParser(description="Refine model images")
+    reqs = parser.add_argument_group("Required arguments")
+    reqs.add_argument("--ms", dest="ms_name", required=True, metavar="",
+        help="Input MS. Used for getting reference frequency")
+    reqs.add_argument("-ip", "--input-prefix", dest="input_prefix",
+        required=True, metavar="",
+        help="The input image prefix. The same as the one used for wsclean")
+    reqs.add_argument("-co", "--channels-out", dest="channels_out", metavar="",
+        required=True, type=int,
+        help="Number of channels to generate out")
+    reqs.add_argument("-od", "--output-dir", dest="output_dir", default=None,
+        metavar="",
+        help="Where to put the output files.")
+    reqs.add_argument("-order", "--polynomial-order", dest="poly_order",
+        default=None, metavar="", type=int,
+        help="Order of the spectral polynomial")
+    return parser
 
 
 def get_ms_ref_freq(ms_name):
@@ -74,7 +73,6 @@ def read_input_image_header(im_name):
             info["data"] = hdu.data
 
     return info
-
 
 
 def get_band_start_and_band_width(freq_delta, first_freq, last_freq):
@@ -203,13 +201,6 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
 
     betaout = Xeval.dot(comps)
     betaout = betaout.reshape(betaout.shape[0], nx, ny)
-
-    """
-    # attempting to integrate dask
-    # comps = da.asarray(comps, chunks=(comps.shape[0], 1000_000))
-    # betaout = da.map_blocks(lambda a, b: da.dot(a, b), comps.T, Xeval.T)
-    # betaout = betaout.compute().compute()
-    """
     
     modelout = np.zeros((nchan, nx, ny))
     modelout = betaout[:, mask]
@@ -237,47 +228,54 @@ def gen_fits_file_from_template(template_fits, center_freq, new_data, out_fits):
     snitch.info(f"New file written to: {out_fits}")
     return
 
-def write_out_images(temp_fits, out_models, out_freqs):
-    """
-    Parameters
-    ----------
-    out_models : np.ndarray
-        A "concatenated" array containing n_output_channel, xpix, ypix
-    out_freqs: array
-        Array containing all the new center freqs
+
+def main():
+    args = get_arguments().parse_args()
+
+    if args.output_dir is None:
+        output_dir = os.path.join(os.path.dirname(args.input_prefix), "smooth_out") 
+    else:
+        output_dir = args.output_dir
     
-    WE ARE HERE!!!!!!!!!!!!!
-    """
-    for chan in range(out_models.shape[0]):
-        outname = re.sub(r"(\d){4}", "{chan}".zfill(4), temp_fits)
-        gen_fits_file_from_template(temp_fits, out_freqs[chan], out_models[chan], outname)
+    if not os.path.isdir(output_dir):
+        snitch.info(f"Creating output directory: {output_dir}")
+        os.makedirs(output_dir)
 
-for stokes in "IQUV":
-    images_list = sorted(glob(f"model_images/*00*{stokes}*model*.fits"))
-    image_items = []
-    for sti_names in images_list:
-        im_header = read_input_image_header(sti_names)
-        image_items.append(im_header)
-    
-    bstart, bwidth = get_band_start_and_band_width(
-        image_items[0]["freq_delta"],
-        image_items[0]["freq"],
-        image_items[-1]["freq"])
+    ref_freq = get_ms_ref_freq(args.ms_name)  
 
-    model = concat_models([image_item["data"] for image_item in image_items])
-    out_freqs = gen_out_freqs(bstart, bwidth, BANDS_OUT)
+    for stokes in "IQUV":
+        snitch.info(f"Running Stoke's {stokes}")
 
-    # gather the wsums and center frequencies
-    w_sums = np.array([item["wsum"] for item in image_items])
-    w_sums = w_sums[:, np.newaxis]
-    input_center_freqs = np.array([item["freq"] for item in image_items])
+        images_list = sorted(glob(f"{args.input_prefix}*00*{stokes}*model*.fits"))
+        im_heads = []
 
-    out_model  = interp_cube(model, w_sums, input_center_freqs, out_freqs,
-                             REF_FREQ, POLY_ORDER)
+        for im_name in images_list:
+            im_header = read_input_image_header(im_name)
+            im_heads.append(im_header)
+        
+        bstart, bwidth = get_band_start_and_band_width(
+            im_heads[0]["freq_delta"], im_heads[0]["freq"], im_heads[-1]["freq"])
 
-    for chan in range(out_model.shape[0]):
-        outname = os.path.basename(images_list[0])
-        outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
-        gen_fits_file_from_template(images_list[0], out_freqs[chan],
-                                    out_model[chan], outname)
-    print("Done")
+        model = concat_models([image_item["data"] for image_item in im_heads])
+        out_freqs = gen_out_freqs(bstart, bwidth, args.channels_out)
+
+        # gather the wsums and center frequencies
+        w_sums = np.array([item["wsum"] for item in im_heads])
+        w_sums = w_sums[:, np.newaxis]
+        input_center_freqs = np.array([item["freq"] for item in im_heads])
+
+        out_model = interp_cube(model, w_sums, input_center_freqs, out_freqs,
+                                ref_freq, args.poly_order)
+
+        for chan in range(args.channels_out):
+            outname = os.path.basename(images_list[0])
+            outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
+            outname = os.path.join(output_dir, outname)
+            gen_fits_file_from_template(images_list[0], out_freqs[chan],
+                                        out_model[chan], outname)
+        
+        snitch.info("Done")
+
+
+if __name__ == "__main__":
+    main()
