@@ -1,0 +1,4 @@
+numpy
+dask
+astropy
+python-casacore
