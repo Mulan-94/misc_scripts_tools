@@ -216,7 +216,7 @@ def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out
         for i in range(1, temp_hdu.header["NAXIS"]+1):
             if temp_hdu.header[f"CUNIT{i}"].lower() == "hz":
                 temp_hdu.header[f"CRVAL{i}"] = center_freq
-                temp_hdu.header[f"CDELT{i}"] = center_freq
+                temp_hdu.header[f"CDELT{i}"] = cdelt
       
         #update with the new data
         if temp_hdu.data.ndim == 4:
