@@ -2,3 +2,4 @@ numpy
 dask
 astropy
 python-casacore
+ipdb

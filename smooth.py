@@ -208,7 +208,7 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     return modelout
 
 
-def gen_fits_file_from_template(template_fits, center_freq, new_data, out_fits):
+def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out_fits):
     with fits.open(template_fits, mode="readonly") as temp_hdu_list:
         temp_hdu, = temp_hdu_list
 
@@ -216,6 +216,7 @@ def gen_fits_file_from_template(template_fits, center_freq, new_data, out_fits):
         for i in range(1, temp_hdu.header["NAXIS"]+1):
             if temp_hdu.header[f"CUNIT{i}"].lower() == "hz":
                 temp_hdu.header[f"CRVAL{i}"] = center_freq
+                temp_hdu.header[f"CDELT{i}"] = center_freq
       
         #update with the new data
         if temp_hdu.data.ndim == 4:
@@ -258,6 +259,7 @@ def main():
 
         model = concat_models([image_item["data"] for image_item in im_heads])
         out_freqs = gen_out_freqs(bstart, bwidth, args.channels_out)
+        new_cdelt = out_freqs[1] - out_freqs[0]
 
         # gather the wsums and center frequencies
         w_sums = np.array([item["wsum"] for item in im_heads])
@@ -271,8 +273,9 @@ def main():
             outname = os.path.basename(images_list[0])
             outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
             outname = os.path.join(output_dir, outname)
-            gen_fits_file_from_template(images_list[0], out_freqs[chan],
-                                        out_model[chan], outname)
+            gen_fits_file_from_template(
+                images_list[0], out_freqs[chan], new_cdelt, out_model[chan],
+                outname)
         
         snitch.info("Done")
 
