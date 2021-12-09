@@ -27,9 +27,10 @@ def get_arguments():
 
     reqs.add_argument("-ims", "--images", dest="images", required=True, metavar="",
         nargs="+", type=str, action="append",
-        help="""Groups of images to plot. D,o comma separated list per group with
-        spaces separating each group. e.g if we want image a+b, c+d, e+f etc,
-        set this as a,b  c,d  e,f""")
+        help="""Groups of images to plot. Do space separated list per group. If
+        there are multiple groups, specify this argument multiple times. i.e
+        -ims a b c d -ims z x y spaces separating each group. e.g if we want
+        image a+b, c+d, e+f etc, set this as a,b  c,d  e,f""")
     
     reqs.add_argument("-o", "--output", dest="outputs", metavar="", nargs="+",
         default=[None], help="""Name of the output fits file.""")
