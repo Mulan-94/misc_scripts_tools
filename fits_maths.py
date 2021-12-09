@@ -14,7 +14,11 @@ snitch.setLevel(logging.INFO)
 
 
 def get_arguments():
-    parser = argparse.ArgumentParser(description="Refine model images")
+    parser = argparse.ArgumentParser(
+        formatter_class=argparse.RawTextHelpFormatter,
+        description="""FITS mazematics :)\n==================\nFor example
+        python fits_maths.py -ims 64-chans/37-QU-for-RM*00*Q*image* -o image_sum.fits -ops "+" """
+        )
     reqs = parser.add_argument_group("Required arguments")
 
     reqs.add_argument("-ops", "--operators", dest="operators", type=str,
