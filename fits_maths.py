@@ -4,7 +4,6 @@ import os
 import logging
 import numpy as np
 import operator
-
 from functools import reduce
 from itertools import chain, zip_longest
 from astropy.io import fits
