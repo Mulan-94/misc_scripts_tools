@@ -7,6 +7,7 @@ import operator
 from functools import reduce
 from itertools import chain, zip_longest
 from astropy.io import fits
+from ipdb import set_trace
 
 logging.basicConfig(format="%(name)s: %(levelname)s: %(message)s")
 snitch = logging.getLogger("sade")
@@ -17,7 +18,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.RawTextHelpFormatter,
         description="""FITS mazematics :)\n==================\nFor example
-        python fits_maths.py -ims 64-chans/37-QU-for-RM*00*Q*image* -o image_sum.fits -ops "+" """
+        python fits_maths.py -ims 64-chans/*00*Q*image* -o image_sum.fits -ops "+" """
         )
     reqs = parser.add_argument_group("Required arguments")
 
@@ -56,14 +57,13 @@ def read_input_image_header(im_name):
     snitch.info(f"Reading image: {im_name} header")
     with fits.open(im_name, readonly=True) as hdu_list:
         # print(f"There are:{len(hdu_list)} HDUs in this image")
-        data = hdu_list[0].data
+        data = hdu_list[0].data.squeeze()
     return data
 
 
 def gen_fits_file_from_template(template_fits, new_data, out_fits):
     with fits.open(template_fits, mode="readonly") as temp_hdu_list:
         temp_hdu, = temp_hdu_list
-
         #update with the new data
         if temp_hdu.data.ndim == 4:
             temp_hdu.data[0,0] = new_data
@@ -128,7 +128,7 @@ def main():
         # operate on the data
         # return the output
         # number of oupts should be the same as number of keys
-        for op in ps.operators:
+        for op in ps.operators[0].split():
             inp_groups[group_idx] = operate(inp_groups[group_idx], op)
 
         # write the output to a new output fits file
