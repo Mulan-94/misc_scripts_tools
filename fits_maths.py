@@ -20,6 +20,10 @@ def get_arguments():
         description="""FITS mazematics :)\n==================\nFor example
         python fits_maths.py -ims 64-chans/*00*Q*image* -o image_sum.fits -ops "+" """
         )
+
+    parser.add_argument("-overwrite", action="store_true", dest="overwrite",
+        help="""Whether or not to overwrite the output images""")
+
     reqs = parser.add_argument_group("Required arguments")
 
     reqs.add_argument("-ops", "--operators", dest="operators", type=str,
@@ -61,7 +65,7 @@ def read_input_image_header(im_name):
     return data
 
 
-def gen_fits_file_from_template(template_fits, new_data, out_fits):
+def gen_fits_file_from_template(template_fits, new_data, out_fits, overwrite=False):
     with fits.open(template_fits, mode="readonly") as temp_hdu_list:
         temp_hdu, = temp_hdu_list
         #update with the new data
@@ -71,7 +75,7 @@ def gen_fits_file_from_template(template_fits, new_data, out_fits):
             temp_hdu.data[0] = new_data
         elif temp_hdu.data.ndim == 2:
             temp_hdu.data = new_data
-        temp_hdu_list.writeto(out_fits)
+        temp_hdu_list.writeto(out_fits, overwrite=overwrite)
     
     snitch.info("=================================")
     snitch.info(f"New file written to: {out_fits}")
@@ -97,7 +101,7 @@ def operate(inp, op):
 
 def main():
     ps = get_arguments().parse_args()
-    
+
     # form image name input groups
     inp_groups =  {}
     for idx, imag in enumerate(ps.images):
@@ -116,11 +120,19 @@ def main():
         places things to be operated together in one group
         this is the same case as when there's only a single group
         """
-        nu_array = np.array(list(inp_groups.values()))
+        nu_array = np.array(list(inp_groups.values())).T
       
         inp_groups = {r: list(nu_array[r, :]) for r in range(nu_array.shape[0])}
 
-    for (group_idx, group), out_name in zip_longest(inp_groups.items(), ps.outputs):
+
+    if len(ps.outputs)>1:
+        outputs = ps.outputs
+    elif len(ps.outputs)==1:
+        outputs = ps.outputs * len(inp_groups)
+    else:
+        outputs = ["group_out"] * len(inp_groups)
+
+    for (group_idx, group), out_name in zip_longest(inp_groups.items(), outputs):
         # read the images and get their data
         # store the data in an ordered list
         inp_groups[group_idx] = [read_input_image_header(grp) for grp in group]
@@ -133,10 +145,11 @@ def main():
 
         # write the output to a new output fits file
         # close
-        out_name =  f"grp_{group_idx}.fits" if out_name is None else out_name
+        out_name =  f"{out_name}_{group_idx}.fits"
 
         gen_fits_file_from_template(
-            group[group_idx],  inp_groups[group_idx], out_name)
+            group[0],  inp_groups[group_idx], out_name,
+            overwrite=ps.overwrite)
 
     snitch.info("Done calculating")
 
