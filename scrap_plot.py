@@ -54,4 +54,4 @@ def plot_spectra(file_core, outfile):
 
 
 if __name__ == "__main__":
-    plot_spectra("regions-mpc-10", "QU-regions-mpc-10")
+    plot_spectra("regions-mpc-10", "QU-regions-mpc-10") 
