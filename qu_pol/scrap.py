@@ -11,6 +11,7 @@ import os
 import regions
 import matplotlib.pyplot as plt
 import numpy as np
+import warnings
 
 # from casatasks import imstat
 from astropy.io import fits
@@ -24,19 +25,141 @@ from ipdb import set_trace
 light_speed = 3e8
 marker_size = 10
 
-logging.basicConfig(level=logging.INFO, 
-    format="%(levelname)s %(message)s", 
-    filename="test_option.log", filemode="w")
+# ignore overflow errors, assume these to be mostly flagged data
+warnings.simplefilter("ignore")
+
+l_handler = logging.FileHandler("xcrapping.log", mode="w")
+l_handler.setLevel(logging.DEBUG)
+
+s_handler = logging.StreamHandler()
+s_handler.setLevel(logging.INFO)
+
+
+logging.basicConfig(level=logging.DEBUG,
+    datefmt='%H:%M:%S %d.%m.%Y',
+    format="%(asctime)s - %(levelname)s - %(message)s", 
+    handlers=[l_handler, s_handler])
+
+def make_out_dir(dir_name):
+    if not os.path.isdir(dir_name):
+        os.mkdir(dir_name)
+    return os.path.relpath(dir_name)
+
+
+def create_figure(grid_size, fsize=(20, 10)):
+    fig, sp = plt.subplots(*grid_size, sharex=False, sharey=False,
+        gridspec_kw={"wspace": 0, "hspace": 0}, figsize=fsize, dpi=200)
+    return fig, sp
+
+
+def rms(in_data):
+    """Root mean square"""
+    return np.sqrt(np.square(in_data).mean())
+
+
+def ssq(in_data):
+    """Sum of squares"""
+    return np.nansum(np.square(in_data))
+
+
+def sqrt_ssq(*args):
+    """Square root of sum of squares"""
+    squares = [np.square(x) for x in args]
+    squares = np.sqrt(np.sum(squares, axis=0))
+    return squares
+
+def are_all_nan(inp):
+    return np.all(np.isnan(inp))
+
+def are_all_zeroes(inp):
+    return np.all(inp==0)
+
+def is_infinite(inp):
+    return np.isinf(inp)
+
+def linear_polzn(stokes_q, stokes_u):
+    return sqrt_ssq(stokes_q, stokes_u)
+
+
+def fractional_polzn(stokes_i, stokes_q, stokes_u):
+    linear_pol = linear_polzn(stokes_q, stokes_u)
+    frac_pol = linear_pol / stokes_i
+    return frac_pol
 
 
 def timer(func):
     def wrapper(*args, **kwargs):
         start = perf_counter()
         result = func(*args, **kwargs)
-        print(f"'{func.__name__}' run in: {perf_counter()-start:.2f} sec")
+        logging.info(f"'{func.__name__}' run in: {perf_counter()-start:.2f} sec")
         return result
     return wrapper
 
+
+# ==========================================================================
+def lambda_sq(freq):
+    #speed of light in a vacuum
+    C = 3e8
+    # frequency to wavelength
+    wave = C/freq
+    return np.square(wave)
+
+
+def get_useful_data(fname):
+    data = {}
+    with fits.open(fname) as hdul:
+        # data["bmaj"] = hdul[0].header["BMAJ"]
+        # data["bmin"] = hdul[0].header["BMIN"]
+        data["freqs"] = hdul[0].header["CRVAL3"]
+        data["waves"] = lambda_sq(data["freqs"])
+        data["fnames"] = fname
+        data["data"] = hdul[0].data.squeeze()
+        data["freqs"] /= 1e9
+    return data
+
+
+def extract_stats2(fname, reg, noise_reg, sig_factor=10):
+    # get image data
+    im_data = get_useful_data(fname)
+    data = im_data.pop("data")
+
+    # Get image noise from standard deviation of a sourceless region
+    noise_cut = get_data_cut(noise_reg, data)
+
+    noise = np.nanstd(noise_cut)
+
+    # global noise sigma
+    # glob_noise = np.nanstd(data)
+    
+    # Get mean flux over the pixels
+    intense_cut = get_data_cut(reg, data)
+
+
+    if (are_all_nan(intense_cut) or are_all_zeroes(intense_cut) or
+        is_infinite(noise)):
+        # skip all the nonsence if all the data is Nan
+        logging.debug(f"Skipping region:{reg.meta['label']} {fname} because NaN/Zeroes/inf ")
+        im_data["flux_jybm"] = im_data["flux_jy"] = None
+        return im_data
+
+    # flux per beam sum
+    flux_jybm = np.nansum(get_data_cut(reg, data))
+
+    # flux_jybm = np.nanmean(intense_cut)
+
+    # flux in jansky
+    # flux_jy = get_flux(hdu_header, flux_jybm)
+    flux_jy = None
+    
+    if (flux_jybm > sig_factor * noise) and flux_jybm < 0.5e3:
+        im_data["flux_jybm"] = flux_jybm
+        im_data["flux_jy"] = flux_jy
+    else:
+        im_data["flux_jybm"] = im_data["flux_jy"] = None
+
+    return im_data
+
+# ==========================================================================
 
 def get_flux(header, flux_sum):
     bmaj = np.abs(header["BMAJ"])
@@ -54,28 +177,14 @@ def get_flux(header, flux_sum):
     return flux
 
 
-def flux_sum_from_flux(fname, flux):
-    with fits.open(fname) as hdul:
-        header = hdul[0]
-    bmaj = np.abs(header["BMAJ"])
-    bmin = np.abs(header["BMIN"])
-    cdelt1 = header["CDELT1"]
-    cdelt2 = header["CDELT2"]
-    # from definitions of FWHM
-    gfactor = 2.0 * np.sqrt(2.0 * np.log(2.0))
-    beam_area = np.abs((2 * np.pi * (bmaj/cdelt1) * (bmin/cdelt2)) / gfactor**2)
-
-    return flux * beam_area
-
-
 def get_box_dims(reg):
     # blc: bottom left corner, trc: top right corner
     # blc_x, trc_x, blc_y, trc_y
-    # print(reg.bounding_box)
     box = ",".join(
         [str(getattr(reg.bounding_box, x)) 
             for x in "ixmin iymin ixmax  iymax".split()])
     return box
+
 
 def get_imstat_box_dims(reg):
     """
@@ -99,78 +208,10 @@ def get_imstat_box_dims(reg):
     return ",".join(box)
 
 
-def rms(in_data):
-    """Root mean square"""
-    return np.sqrt(np.square(in_data).mean())
-
-def ssq(in_data):
-    """Sum of squares"""
-    return np.nansum(np.square(in_data))
-
-def sqrt_ssq(*args):
-    """Square root of sum of squares"""
-    squares = [np.square(x) for x in args]
-    squares = np.sqrt(np.nansum(squares, axis=0))
-    return squares
-
-def extract_stats(fname, reg, noise_reg, sig_factor=10):
-    # """
-    # fname: image name
-    # reg: region of interest
-    # noise_reg: the noise region
-    # sig_factor: z-score?
-    # """
-    # stats = imstat(imagename=fname,box=get_box_dims(reg))
-   
-    # if "flux" not in stats:
-    #     return None, None
-    
-    # noise_stats = imstat(imagename=fname, box=get_box_dims(noise_reg))
-    # noise_std = noise_stats["sigma"]
-    # flux = stats["flux"][0]
-    # snr = flux/noise_std
-
-    # glob_sigma = imstat(imagename=fname)["sigma"]        
-
-    # if snr > sig_factor * glob_sigma:
-    #     freq = float(stats["blcf"].split(",")[-2].strip()[:-2])
-    #     waves = (light_speed/freq)**2
-    #     return flux, waves
-    # else:
-        # return None, None
-    pass
-
-
 def get_data_cut(reg, data):
     reg_mask = reg.to_mask()
     data_cut = reg_mask.cutout(data)
     return data_cut
-
-
-def extract_stats2(fname, reg, noise_reg, sig_factor=10):
-    with fits.open(fname) as hdul:
-        hdu_data = hdul[0].data.squeeze().astype(np.float64)
-        hdu_header = hdul[0].header
-
-    data_cut = get_data_cut(reg, hdu_data)
-    data_flux = np.nansum(data_cut)
-    data_flux_bm = get_flux(hdu_header, data_flux)
-    waves = None
-    freqs = None
-    if data_flux is not None and data_flux !=0 :
-        glob_sigma = np.nanstd(hdu_data)
-        noise_sigma = np.nanstd(get_data_cut(noise_reg, hdu_data))
-        snr = data_flux/noise_sigma
-        
-        if snr > sig_factor * glob_sigma:
-            freqs = hdu_header["CRVAL3"]
-            waves = (light_speed/freqs)**2
-        else:
-            data_flux = None
-            data_flux_bm = None
-   
-    logging.info(f"flux: {data_flux}, waves: {waves} ,freqs: {freqs}, {fname}")
-    return data_flux, data_flux_bm, waves, freqs, fname
 
 @timer
 def get_image_stats2(stokes, file_core, images, regs, noise_reg):
@@ -184,89 +225,45 @@ def get_image_stats2(stokes, file_core, images, regs, noise_reg):
                 partial(extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=10), images
                 )
         
-        # Q and U for each freq
-        results = list(results)
-        fluxes = [res[0] for res in results]
-        fluxes_bm = [res[1] for res in results]
-        waves = [res[2] for res in results]
-        freqs = [res[3] for res in results]
-        fnames = [res[4] for res in results]
 
-        np.savez(os.path.join(out_dir, f"{reg.meta['label']}_{stokes}"), 
-            flux=fluxes, fluxes_bm=fluxes_bm, waves=waves, freqs=freqs, fnames=fnames)
+        # results = []
+        # for im in images:
+        #     if "37b-QU-for-RM-1024-1279-0254-Q-image.fits" not in im:
+        #         continue
+        #     results.append(extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+
+
+        # Q and U for each freq
+        outs = {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
+        outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
+
+        # fhandler = open(f"{outfile}.txt", "w")
+        # fhandler.write(f"{'flux_jy'}\t\t{'flux_jybm'}\t\t{'waves_[m**2]'}\t\t{'freqs_[GHz]'}\t\t{'fnames':<15}\n")
+        
+        for res in results:
+            # try:
+            #     fhandler.write("{:.5}\t\t{:.5}\t\t{:.4f}\t\t{:.4f}\t\t{}\n".format(
+            #         str(res["flux_jy"]), str(res["flux_jybm"]),
+            #         res["waves"], res["freqs"], res["fnames"])
+            #     )
+            # except:
+            #     fhandler.close()
+            
+            outs["flux_jy"].append(res["flux_jy"])
+            outs["flux_jybm"].append(res["flux_jybm"])
+            outs["waves"].append(res["waves"])
+            outs["freqs"].append(res["freqs"])
+            outs["fnames"].append(res["fnames"])
+
+        # fhandler.close()
+
+        np.savez(outfile, 
+            **outs
+            )
 
     logging.info(f"Stokes {stokes} done")
     logging.info("---------------")
     return
-
-
-def make_out_dir(dir_name):
-    if not os.path.isdir(dir_name):
-        os.mkdir(dir_name)
-    return os.path.relpath(dir_name)
-
-
-def create_figure(grid_size, fsize=(20, 10)):
-    fig, sp = plt.subplots(*grid_size, sharex=False, sharey=False,
-        gridspec_kw={"wspace": 0, "hspace": 0}, figsize=fsize, dpi=200)
-    return fig, sp
-
-
-
-@timer
-def plot_spectra(file_core, outfile, xscale="linear"):
-    """
-    file_core: str
-        core of the folders where the data are contained
-    outfile: str
-        prefix name of the output file
-    """
-    colours = {"Q": "r", "U": "b"}
-    fight = lambda x: int(os.path.basename(x).split("_")[1])
-
-    q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
-    u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
-
-    qu_files = list(zip(q_files, u_files))
-    n_qf = len(q_files)
-
-    # rationale is a 4:3 aspect ratio, max is this value x 3 = 12:9
-    # toget respsective sizes, add length+width and mult by ratio
-    rows = 9 if n_qf > 108 else int(np.ceil(3/7*(np.sqrt(n_qf)*2)))
-    cols = 12 if n_qf > 108 else int(np.ceil(4/7*(np.sqrt(n_qf)*2)))
-    grid_size_sq = rows*cols
-
-    print("Starting plots")
-    for i, files in enumerate(qu_files):
-        if i % grid_size_sq == 0:
-            fig, sp = create_figure((rows, cols), fsize=(50, 30))
-            rc = product(range(rows), range(cols))
-
-        row, col = next(rc)
-        powers = {}
-        for stokes in files:
-            reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
-            c_stoke = reg_name[-1]
-            with np.load(stokes, allow_pickle=True) as data:
-                powers[c_stoke] = data["flux"].astype(float)
-                waves = data["waves"].astype(float)
-
-            sp[row, col].plot(waves, powers[c_stoke], f"{colours[c_stoke]}o", markersize=marker_size, label=c_stoke, alpha=0.4)
-            sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-14, size=9)
-            sp[row, col].set_xscale(xscale)
-            sp[row, col].set_yscale(xscale)
-
-        # for power plots
-        power = sqrt_ssq(powers["Q"], powers["U"])
-        sp[row, col].plot(waves, power, f"g+", markersize=marker_size, label="power", alpha=0.5)
-        
-        if np.prod((row*col)+1==grid_size_sq or (n_qf<grid_size_sq and i==n_qf-1)):
-            fig.tight_layout()
-            fig.legend(["Q", "U", "power"], bbox_to_anchor=(1, 1.01), markerscale=3, ncol=3)
-            # fig.suptitle("Q and U vs Lambda**2")
-            fig.savefig(f"{outfile}-{int(i/grid_size_sq)}", bbox_inches='tight')
-            plt.close("all")
-            print(f"Plotting done for {outfile}-{int(i/grid_size_sq)}")
 
 
 def generate_regions(reg_fname, factor=50, max_w=572, max_h=572):
@@ -304,74 +301,143 @@ def generate_regions(reg_fname, factor=50, max_w=572, max_h=572):
     if ".reg" not in reg_fname:
         reg_fname += f"-{factor}.reg"
 
-    with open(reg_fname, "w") as fil:
-        pts = [p+"\n" for p in header+pts]
-        fil.writelines(pts)
+    if not os.path.isfile(reg_fname):
+        with open(reg_fname, "w") as fil:
+            pts = [p+"\n" for p in header+pts]
+            fil.writelines(pts)
 
-    logging.info(f"Regions file written to: {reg_fname}")
+        logging.info(f"Regions file written to: {reg_fname}")
+    else:
+        logging.info(f"File already available at: {reg_fname}")
     return reg_fname
 
-"""
-def get_image_stats(stokes, file_core, images, regs, noise_reg):
-    out_dir = make_out_dir(f"{stokes}-{file_core}")
-    fluxes, waves = [], []
-    for reg in regs:
-        print(f"Region: {reg.meta['label']}")
 
-        with futures.ProcessPoolExecutor(max_workers=70) as executor:
-            results = executor.map(
-                partial(extract_stats, reg=reg, noise_reg=noise_reg), images
-                )
+def plot_spectra(file_core, outfile, xscale="linear"):
+    """
+    file_core: str
+        core of the folders where the data are contained
+    outfile: str
+        prefix name of the output file
+    """
+    # r: red, b: blue, k: black
+    colours = {
+        "Q": "r2", "U": "b1", "I": "ko", 
+        "poln_power": "mx", "frac_poln": "g+"}
+    fight = lambda x: int(os.path.basename(x).split("_")[1])
+
+    q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
+    u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
+    i_files = sorted(glob(f"./I-{file_core}/*.npz"), key=fight)
+
+    qui_files = list(zip(q_files, u_files, i_files))
+    n_qf = len(q_files)
+    logging.info(f"Found {n_qf} QUI files")
+
+    # rationale is a 4:3 aspect ratio, max is this value x 3 = 12:9
+    # toget respsective sizes, add length+width and mult by ratio
+    rows = 9 if n_qf > 108 else int(np.ceil(3/7*(np.sqrt(n_qf)*2)))
+    cols = 12 if n_qf > 108 else int(np.ceil(4/7*(np.sqrt(n_qf)*2)))
+    grid_size_sq = rows*cols
+
+    logging.info("Starting plots")
+    plt.close("all")
+    for i, files in enumerate(qui_files):
+        if i % grid_size_sq == 0:
+            fig, sp = create_figure((rows, cols), fsize=(50, 30), sharey=False)
+            rc = product(range(rows), range(cols))
+
+        row, col = next(rc)
+        polns = {}
+        for stokes in files:
+            reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
+            c_stoke = reg_name[-1]
+
+            # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
+            # if c_stoke != "I": 
+            #     print("Not stokes I")
+            #     continue
+            
+            with np.load(stokes, allow_pickle=True) as data:
+                polns[c_stoke] = data["flux_jybm"].astype(float)
+                waves = data["waves"].astype(float)
+                freqs = data["freqs"] / 1e9
+
+            sp[row, col].plot(
+                waves, polns[c_stoke], colours[c_stoke], 
+                markersize=marker_size, label=c_stoke, alpha=0.4)
+
+        sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-14, size=9)
+        sp[row, col].set_xscale(xscale)
+        sp[row, col].set_yscale(xscale)
+
+        # for power plots
+        # polns["poln_power"] = linear_polzn(polns["Q"], polns["U"])
+        # sp[row, col].plot(waves, polns["poln_power"], colours[c_stoke],
+        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        
+        # for fractional polarization
+        # polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
+        # sp[row, col].plot(waves, polns["frac_poln"], colours[c_stoke], 
+        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        
+        # ax2 = sp[row,col].twinx()
+        # ax2.set_xlim(left=np.min(freqs), right=np.max(freqs))
+        # ax2.set_xlabel("Frequency GHz")
+
+        if np.prod((i+1)%grid_size_sq==0 or (n_qf<grid_size_sq and i==n_qf-1)):
+            # Remove empties
+            empties = [i for i, _ in enumerate(sp.flatten()) if not _.lines]
+            for _ in empties:
+                fig.delaxes(sp.flatten()[_])
+            
+            logging.info(f"Starting the saving process: Group {int(i/grid_size_sq)}")
+            fig.tight_layout()
+            fig.legend(list(polns.keys()), bbox_to_anchor=(1, 1.01), markerscale=3, ncol=3)
+            # fig.suptitle("Q and U vs Lambda**2")
+            fig.savefig(f"{outfile}-{int(i/grid_size_sq)}", bbox_inches='tight')
+            plt.close("all")
+            logging.info(f"Plotting done for {outfile}-{int(i/grid_size_sq)}")
 
 
-        # Q and U for each freq
-        results = list(results)
-        fluxes = [res[0] for res in results if res[0] is not None]
-        waves = [res[1] for res in results if res[1] is not None]
 
-        np.savez(os.path.join(out_dir, f"{reg.meta['label']}_{stokes}"), 
-            flux=fluxes, waves=waves)
-
-    print(f"Stokes {stokes} done")
-    print("---------------")
-    return True
-"""
-
-# [3, 5, 7, 9, 11]
-# [3, 5, 7, 10, 50]:
-# for factor in [50, 10, 7, 5, 3]:
+# for factor in [70, 50, 10, 7, 5, 3]:
 
 
 sortkey = lambda x: int(os.path.basename(x).split("-")[0])
 
-for factor in [70, 50, 10, 7, 5, 3]:
+for factor in [70, 50]:
 
     start = perf_counter()
 
-    file_core = f"regions-mpc-{factor}"
+    testing = "-postest"
+    file_core = f"regions-mpc-{factor}{testing}"
 
     reg_file = generate_regions(f"regions/beacons", factor=factor)
     regs = regions.Regions.read(reg_file, format="ds9")
 
     noise_reg = regs.pop(-1)
+    #regs = regs[7094:]
 
-    for stokes in "Q U".split():
-        images = sorted(glob(f"./channelised/*-*"), key=sortkey)
-        sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
+    for stokes in "I Q U".split():
+        
+        if stokes != "I":
+            images = sorted(glob(f"./channelised/*-*"), key=sortkey)
+            sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
+        else:
+            images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
+            sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
+        
         images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
         
-          
-        print(f"Working on Stokes {stokes}")
-        print(f"With {len(regs)} regions")
-        print(f"And {len(images)} images")
+        logging.info(f"Working on Stokes {stokes}")
+        logging.info(f"With {len(regs)} regions")
+        logging.info(f"And {len(images)} images")
         
         bn = get_image_stats2(stokes, file_core, images, regs, noise_reg)
 
-    plot_dir = make_out_dir(f"plots-{stokes}-{file_core}")
+    plot_dir = make_out_dir(f"plots-QU-{file_core}")
     pout = os.path.join(plot_dir,  f"QU-{file_core}")
+    plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{i}")
 
-    plot_spectra(file_core, pout+"linear", xscale="linear")
-    plot_spectra(file_core, pout+"log", xscale="log")
-
-    print(f"Finished factor {factor} in {perf_counter() - start} seconds")
-    print("======================================")
+    logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
+    logging.info("======================================")
