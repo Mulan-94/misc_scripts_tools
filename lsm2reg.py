@@ -18,7 +18,7 @@ class RegionProperties:
         # ensure that this is always last thing ong the list
         self.pre_specs.insert(-1, "+" if on else "-")
 
-    def coord_sys(self, coord="physical"):
+    def coord_sys(self, coord="fk5"):
         coords = [
             'image','linear','fk4','b1950','fk5','j2000','galactic',
             'ecliptic','icrs','physical','amplifier','detector','wcs',
@@ -299,7 +299,7 @@ class LSM2Reg:
         headers = [
             "# Region file format: DS9 version 4.0",
             'global color=yellow font="helvetica 10 normal roman" edit=1 move=1 delete=1 highlite=1 include=1 source=1',
-            "physical"
+            "fk5"
         ]
 
         with open(self.out_name, "w") as ofile:
