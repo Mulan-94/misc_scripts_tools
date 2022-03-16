@@ -6,6 +6,8 @@ https://github.com/mhardcastle/radioflux/blob/master/radioflux/radioflux.py#L95-
 https://science.nrao.edu/facilities/vla/proposing/TBconv
 https://www.eaobservatory.org/jcmt/faq/how-can-i-convert-from-mjybeam-to-mjy/
 """
+
+import argparse
 import logging
 import os
 import regions
@@ -46,9 +48,10 @@ def make_out_dir(dir_name):
     return os.path.relpath(dir_name)
 
 
-def create_figure(grid_size, fsize=(20, 10)):
-    fig, sp = plt.subplots(*grid_size, sharex=False, sharey=False,
+def create_figure(grid_size, fsize=(20, 10), sharex=True, sharey=False):
+    fig, sp = plt.subplots(*grid_size, sharex=sharex, sharey=sharey,
         gridspec_kw={"wspace": 0, "hspace": 0}, figsize=fsize, dpi=200)
+    # plt.figure(figsize=fsize)
     return fig, sp
 
 
@@ -77,6 +80,7 @@ def are_all_zeroes(inp):
 def is_infinite(inp):
     return np.isinf(inp)
 
+
 def linear_polzn(stokes_q, stokes_u):
     return sqrt_ssq(stokes_q, stokes_u)
 
@@ -97,13 +101,24 @@ def timer(func):
 
 
 # ==========================================================================
-def lambda_sq(freq):
+def lambda_sq(freq_ghz):
     #speed of light in a vacuum
     C = 3e8
+    freq_ghz = freq_ghz * 1e9
     # frequency to wavelength
-    wave = C/freq
+    wave = C/freq_ghz
     return np.square(wave)
 
+
+def format_lsq(inp):
+    inp = lambda_sq(inp)
+    return [float(f"{_:.2f}") for _ in inp]
+
+
+def active_legends(fig):
+    legs = { _.get_legend_handles_labels()[-1][0] for _ in fig.axes
+             if len(_.get_legend_handles_labels()[-1])>0 }
+    return list(legs)
 
 def get_useful_data(fname):
     data = {}
@@ -111,7 +126,7 @@ def get_useful_data(fname):
         # data["bmaj"] = hdul[0].header["BMAJ"]
         # data["bmin"] = hdul[0].header["BMIN"]
         data["freqs"] = hdul[0].header["CRVAL3"]
-        data["waves"] = lambda_sq(data["freqs"])
+        # data["waves"] = lambda_sq(data["freqs"])
         data["fnames"] = fname
         data["data"] = hdul[0].data.squeeze()
         data["freqs"] /= 1e9
@@ -251,7 +266,7 @@ def get_image_stats2(stokes, file_core, images, regs, noise_reg):
             
             outs["flux_jy"].append(res["flux_jy"])
             outs["flux_jybm"].append(res["flux_jybm"])
-            outs["waves"].append(res["waves"])
+            # outs["waves"].append(res["waves"])
             outs["freqs"].append(res["freqs"])
             outs["fnames"].append(res["fnames"])
 
@@ -322,7 +337,7 @@ def plot_spectra(file_core, outfile, xscale="linear"):
     # r: red, b: blue, k: black
     colours = {
         "Q": "r2", "U": "b1", "I": "ko", 
-        "poln_power": "mx", "frac_poln": "g+"}
+        "poln_power": "g+", "frac_poln":"mx"}
     fight = lambda x: int(os.path.basename(x).split("_")[1])
 
     q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
@@ -348,96 +363,131 @@ def plot_spectra(file_core, outfile, xscale="linear"):
 
         row, col = next(rc)
         polns = {}
+    
         for stokes in files:
             reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
             c_stoke = reg_name[-1]
+            specs = {k:v for k,v in zip(["c","marker"], colours[c_stoke])}
+            specs.update(dict(s=marker_size*4.1, label=c_stoke, alpha=0.4))
 
             # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
-            # if c_stoke != "I": 
-            #     print("Not stokes I")
-            #     continue
             
             with np.load(stokes, allow_pickle=True) as data:
+                # these frequencies are already in GHZ
+                freqs = data["freqs"]
+                
                 polns[c_stoke] = data["flux_jybm"].astype(float)
-                waves = data["waves"].astype(float)
-                freqs = data["freqs"] / 1e9
-
-            sp[row, col].plot(
-                waves, polns[c_stoke], colours[c_stoke], 
-                markersize=marker_size, label=c_stoke, alpha=0.4)
+            # sp[row, col].scatter(freqs, polns[c_stoke], **specs)
 
         sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-14, size=9)
         sp[row, col].set_xscale(xscale)
         sp[row, col].set_yscale(xscale)
 
-        # for power plots
+        del specs["label"]
+        # # for power plots
         # polns["poln_power"] = linear_polzn(polns["Q"], polns["U"])
-        # sp[row, col].plot(waves, polns["poln_power"], colours[c_stoke],
-        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
+        # sp[row, col].scatter(freqs, polns["poln_power"], label="poln_power", **specs)
         
         # for fractional polarization
-        # polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
-        # sp[row, col].plot(waves, polns["frac_poln"], colours[c_stoke], 
-        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
+        specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
         
-        # ax2 = sp[row,col].twinx()
-        # ax2.set_xlim(left=np.min(freqs), right=np.max(freqs))
-        # ax2.set_xlabel("Frequency GHz")
+        sp[row, col].scatter(freqs, polns["frac_poln"], label="frac_poln", **specs)
+
+        # adding in the extra x-axis for wavelength
+        new_ticklocs = np.linspace((1.2*freqs.min()), (0.9*freqs.max()), 8)
+        sp[row, col].tick_params(axis="x",direction="in", pad=-15)
+        ax2 = sp[row, col].twiny()
+        ax2.set_xlim(sp[row, col].get_xlim())
+        ax2.set_xticks(new_ticklocs)
+        ax2.set_xticklabels(format_lsq(new_ticklocs))
+        ax2.tick_params(axis="x",direction="in", pad=-15)
+        # ax2.set_xlabel("Wavelength m$^2$")
 
         if np.prod((i+1)%grid_size_sq==0 or (n_qf<grid_size_sq and i==n_qf-1)):
             # Remove empties
-            empties = [i for i, _ in enumerate(sp.flatten()) if not _.lines]
+            empties = [i for i, _ in enumerate(sp.flatten()) if (not _.lines) and (not _.collections)]
             for _ in empties:
                 fig.delaxes(sp.flatten()[_])
             
             logging.info(f"Starting the saving process: Group {int(i/grid_size_sq)}")
             fig.tight_layout()
-            fig.legend(list(polns.keys()), bbox_to_anchor=(1, 1.01), markerscale=3, ncol=3)
-            # fig.suptitle("Q and U vs Lambda**2")
-            fig.savefig(f"{outfile}-{int(i/grid_size_sq)}", bbox_inches='tight')
+            legs = active_legends(fig)
+            fig.legend(legs, bbox_to_anchor=(1, 1.01), markerscale=3, ncol=len(legs))
+            fig.suptitle("Q and U vs $\lambda^2$")
+            oname = f"{outfile}-{int(i/grid_size_sq)}-{xscale}"
+            fig.savefig(oname, bbox_inches='tight')
             plt.close("all")
-            logging.info(f"Plotting done for {outfile}-{int(i/grid_size_sq)}")
+            logging.info(f"Plotting done for {oname}")
 
 
+def parser():
+    parsing = argparse.ArgumentParser()
+    parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
+        type=int, default=[], metavar="", 
+        help="Create regions of this pixel size and perform analyses on them")
+    parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
+        help="Plot all the specified region pixels")
+    parsing.add_argument("-p", "--plot", dest="plot", nargs="*", type=int, 
+        metavar="",
+        help="Make plots for these region sizes manually")
+    parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
+        help="Testing prefix. Will be Prepended with '-'", default=None)
+    return parsing
 
-# for factor in [70, 50, 10, 7, 5, 3]:
 
+if __name__ == "__main__":
+    opts = parser().parse_args()
 
-sortkey = lambda x: int(os.path.basename(x).split("-")[0])
+    # for factor in [70, 50, 10, 7, 5, 3]:
+    if opts.testing is None:
+        testing = ""
+    else:
+        testing = "-" + opts.testing
 
-for factor in [70, 50]:
+    if opts.reg_size:
+        sortkey = lambda x: int(os.path.basename(x).split("-")[0])
 
-    start = perf_counter()
+        for factor in opts.reg_size:
+            start = perf_counter()
+            file_core = f"regions-mpc-{factor}{testing}"
 
-    testing = "-postest"
-    file_core = f"regions-mpc-{factor}{testing}"
+            reg_file = generate_regions(f"regions/beacons", factor=factor)
+            regs = regions.Regions.read(reg_file, format="ds9")
 
-    reg_file = generate_regions(f"regions/beacons", factor=factor)
-    regs = regions.Regions.read(reg_file, format="ds9")
+            noise_reg = regs.pop(-1)
+            for stokes in "I Q U".split():
+                
+                if stokes != "I":
+                    images = sorted(glob(f"./channelised/*-*"), key=sortkey)
+                    sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
+                else:
+                    images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
+                    sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
+                
+                images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
+                
+                logging.info(f"Working on Stokes {stokes}")
+                logging.info(f"With {len(regs)} regions")
+                logging.info(f"And {len(images)} images")
+                
+                bn = get_image_stats2(stokes, file_core, images, regs, noise_reg)
 
-    noise_reg = regs.pop(-1)
-    #regs = regs[7094:]
+            if opts.auto_plot:
+                logging.info("Autoplotting is enabled")
+                plot_dir = make_out_dir(f"plots-QU-{file_core}")
+                pout = os.path.join(plot_dir,  f"QU-{file_core}")
+                plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{factor}")
 
-    for stokes in "I Q U".split():
-        
-        if stokes != "I":
-            images = sorted(glob(f"./channelised/*-*"), key=sortkey)
-            sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
-        else:
-            images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
-            sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
-        
-        images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
-        
-        logging.info(f"Working on Stokes {stokes}")
-        logging.info(f"With {len(regs)} regions")
-        logging.info(f"And {len(images)} images")
-        
-        bn = get_image_stats2(stokes, file_core, images, regs, noise_reg)
+            logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
+            logging.info("======================================")
 
-    plot_dir = make_out_dir(f"plots-QU-{file_core}")
-    pout = os.path.join(plot_dir,  f"QU-{file_core}")
-    plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{i}")
-
-    logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
-    logging.info("======================================")
+    if opts.plot:
+        logging.info(f"Plotting is enabled for regions {opts.plot}")
+        for factor in opts.plot:
+            file_core = f"regions-mpc-{factor}{testing}"
+            plot_dir = make_out_dir(f"plots-QU-{file_core}")
+            pout = os.path.join(plot_dir,  f"QU-{file_core}")
+            plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{factor}")
+            plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{factor}", xscale="log")
