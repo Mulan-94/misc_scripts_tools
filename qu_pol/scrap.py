@@ -303,8 +303,22 @@ def lambda_sq(freq_ghz):
     return np.square(wave)
 
 
-def format_lsq(inp):
-    inp = lambda_sq(inp)
+def freq_sqrt(lamsq):
+    #speed of light in a vacuum
+    global light_speed
+
+    lamsq = np.sqrt(lamsq)
+    # frequency to wavelength
+    freq_ghz = (light_speed/lamsq)/1e9
+    return freq_ghz
+
+
+def format_lsq(inp, func):
+    """
+    Converting and formating output
+    Funxtions expdcted lambda_sq, and freq_sqrt
+    """
+    inp = func(inp)
     return [float(f"{_:.2f}") for _ in inp]
 
 
@@ -370,11 +384,15 @@ def plot_spectra(file_core, outfile, xscale="linear"):
             
             with np.load(stokes, allow_pickle=True) as data:
                 # these frequencies are already in GHZ
-                freqs = data["freqs"]
-                
-                polns[c_stoke] = data["flux_jybm"].astype(float)
-            # sp[row, col].scatter(freqs, polns[c_stoke], **specs)
-
+                # flip so that waves increaase
+                freqs = np.flip(data["freqs"])
+                polns[c_stoke] = np.flip(data["flux_jybm"].astype(float))
+            
+            waves = lambda_sq(freqs)
+    
+            # sp[row, col].scatter(waves, polns[c_stoke], **specs)
+        
+        
         sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
         sp[row, col].set_xscale(xscale)
         sp[row, col].set_yscale(xscale)
@@ -384,22 +402,22 @@ def plot_spectra(file_core, outfile, xscale="linear"):
         # # for power plots
         # polns["poln_power"] = linear_polzn(polns["Q"], polns["U"])
         # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
-        # sp[row, col].scatter(freqs, polns["poln_power"], label="poln_power", **specs)
+        # sp[row, col].scatter(waves, polns["poln_power"], label="poln_power", **specs)
         
         # for fractional polarization
         polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
         specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
         
-        sp[row, col].scatter(freqs, polns["frac_poln"], label="frac_poln", **specs)
+        sp[row, col].scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
 
         # adding in the extra x-axis for wavelength
-        new_ticklocs = np.linspace((1.2*freqs.min()), (0.9*freqs.max()), 8)
+        new_ticklocs = np.linspace((1.2*waves.min()), (0.9*waves.max()), 8)
         ax2 = sp[row, col].twiny()
         ax2.set_xlim(sp[row, col].get_xlim())
         ax2.set_xticks(new_ticklocs)
-        ax2.set_xticklabels(format_lsq(new_ticklocs))
+        ax2.set_xticklabels(format_lsq(new_ticklocs, freq_sqrt))
         ax2.tick_params(axis="x",direction="in", pad=-15)
-        plt.setp(ax2, xlabel="Wavelength m$^2$")
+        plt.setp(ax2, xlabel="Freq GHz")
 
         if np.prod((i+1)%grid_size_sq==0 or (n_qf<grid_size_sq and i==n_qf-1)):
             # Remove empties
@@ -416,7 +434,7 @@ def plot_spectra(file_core, outfile, xscale="linear"):
             oname = f"{outfile}-{int(i/grid_size_sq)}-{xscale}"
             
             plt.setp(sp[:,0], ylabel="Frac Pol")
-            plt.setp(sp[:,:], xlabel="Frequency GHz")
+            plt.setp(sp[:,:], xlabel="Wavelength m$^2$")
     
             fig.savefig(oname, bbox_inches='tight')
             plt.close("all")
