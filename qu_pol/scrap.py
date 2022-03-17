@@ -212,7 +212,7 @@ def get_image_stats2(stokes, file_core, images, regs, noise_reg):
     logging.info("starting get_image_stats")
     for reg in regs:
         logging.info(f"Region: {reg.meta['label']}")
-        with futures.ProcessPoolExecutor(max_workers=70) as executor:
+        with futures.ProcessPoolExecutor(max_workers=16) as executor:
             results = executor.map(
                 partial(extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=10), images
                 )
