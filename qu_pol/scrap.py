@@ -99,6 +99,12 @@ def timer(func):
 
 def get_useful_data(fname):
     data = {}
+    try:
+        int(os.path.basename(fname).split("-")[-2])
+        data["stokes"] = os.path.basename(fname).split("-")[-3]
+    except ValueError:
+        data["stokes"] = os.path.basename(fname).split("-")[-2]
+
     with fits.open(fname) as hdul:
         # data["bmaj"] = hdul[0].header["BMAJ"]
         # data["bmin"] = hdul[0].header["BMIN"]
@@ -206,8 +212,7 @@ def get_data_cut(reg, data):
     return data_cut
 
 @timer
-def get_image_stats2(stokes, file_core, images, regs, noise_reg):
-    out_dir = make_out_dir(f"{stokes}-{file_core}")
+def get_image_stats2(file_core, images, regs, noise_reg):
     fluxes, waves = [], []
     logging.info("starting get_image_stats")
     for reg in regs:
@@ -226,18 +231,21 @@ def get_image_stats2(stokes, file_core, images, regs, noise_reg):
 
 
         # Q and U for each freq
-        outs = {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
-        outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
-
+        # outs = {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
+        outs = {_: {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
+                    for _ in "IQU"}
 
         for res in results:           
-            outs["flux_jy"].append(res["flux_jy"])
-            outs["flux_jybm"].append(res["flux_jybm"])
-            # outs["waves"].append(res["waves"])
-            outs["freqs"].append(res["freqs"])
-            outs["fnames"].append(res["fnames"])
+            outs[res["stokes"]]["flux_jy"].append(res["flux_jy"])
+            outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
+            # outs[res["stokes"]]["waves"].append(res["waves"])
+            outs[res["stokes"]]["freqs"].append(res["freqs"])
+            outs[res["stokes"]]["fnames"].append(res["fnames"])
 
-        np.savez(outfile, **outs)
+        for stokes, values in outs.items():
+            out_dir = make_out_dir(f"{stokes}-{file_core}")
+            outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
+            np.savez(outfile, **values)
 
     logging.info(f"Stokes {stokes} done")
     logging.info("---------------")
@@ -504,23 +512,28 @@ if __name__ == "__main__":
             regs = regions.Regions.read(reg_file, format="ds9")
 
             noise_reg = regs.pop(-1)
-            for stokes in "I Q U".split():
+            # for stokes in "I Q U".split():
                 
-                if stokes != "I":
-                    images = sorted(glob(f"./channelised/*-*"), key=sortkey)
-                    sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
-                else:
-                    images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
-                    sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
+            #     if stokes != "I":
+            #         images = sorted(glob(f"./channelised/*-*"), key=sortkey)
+            #         sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
+            #     else:
+            #         images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
+            #         sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
                 
-                images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
-                # images = read_sorted_filnames("post.txt")
+            #     images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
                 
-                logging.info(f"Working on Stokes {stokes}")
-                logging.info(f"With {len(regs)} regions")
-                logging.info(f"And {len(images)} images")
+            #     logging.info(f"Working on Stokes {stokes}")
+            #     logging.info(f"With {len(regs)} regions")
+            #     logging.info(f"And {len(images)} images")
                 
-                bn = get_image_stats2(stokes, file_core, images, regs, noise_reg)
+            #     # bn = get_image_stats2(stokes, file_core, images, regs, noise_reg)
+
+            images = read_sorted_filnames("post.txt")
+            logging.info(f"Working on Stokes IQU")
+            logging.info(f"With {len(regs)} regions")
+            logging.info(f"And {len(images)} images (4096 X IQU)")
+            bn = get_image_stats2(file_core, images, regs, noise_reg)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
