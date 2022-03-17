@@ -39,11 +39,7 @@ def fractional_polzn(stokes_i, stokes_q, stokes_u):
     return frac_pol
 
 
-def create_figure(grid_size, fsize=(20, 10), sharex=True, sharey=False):
-    fig, sp = plt.subplots(*grid_size, sharex=sharex, sharey=sharey,
-        gridspec_kw={"wspace": 0, "hspace": 0}, figsize=fsize, dpi=200)
-    # plt.figure(figsize=fsize)
-    return fig, sp
+
 
 
 def read_pickle(fname, c_stoke):
@@ -72,6 +68,48 @@ def read_regions(reg_num):
     return datas
 
 
+def lambda_sq(freq_ghz):
+    #speed of light in a vacuum
+    global light_speed
+    freq_ghz = freq_ghz * 1e9
+    # frequency to wavelength
+    wave = light_speed/freq_ghz
+    return np.square(wave)
+
+
+def freq_sqrt(lamsq):
+    #speed of light in a vacuum
+    global light_speed
+
+    lamsq = np.sqrt(lamsq)
+    # frequency to wavelength
+    freq_ghz = (light_speed/lamsq)/1e9
+    return freq_ghz
+
+
+def format_lsq(inp, func):
+    """
+    Converting and formating output
+    Funxtions expdcted lambda_sq, and freq_sqrt
+    """
+    inp = func(inp)
+    return [float(f"{_:.2f}") for _ in inp]
+
+
+def active_legends(fig):
+    legs = { _.get_legend_handles_labels()[-1][0] for _ in fig.axes
+             if len(_.get_legend_handles_labels()[-1])>0 }
+    return list(legs)
+
+
+def create_figure(grid_size, fsize=(20, 10), sharex=True, sharey=False):
+    fig, sp = plt.subplots(*grid_size, sharex=sharex, sharey=sharey,
+        # gridspec_kw={"wspace": 0, "hspace": 1}, 
+        figsize=fsize, dpi=200)
+    # plt.figure(figsize=fsize)
+    return fig, sp
+
+
 def plot_spectra(file_core, outfile, xscale="linear"):
     """
     file_core: str
@@ -82,7 +120,7 @@ def plot_spectra(file_core, outfile, xscale="linear"):
     # r: red, b: blue, k: black
     colours = {
         "Q": "r2", "U": "b1", "I": "ko", 
-        "poln_power": "mx", "frac_poln": "g+"}
+        "poln_power": "g+", "frac_poln":"mx"}
     fight = lambda x: int(os.path.basename(x).split("_")[1])
 
     q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
@@ -108,55 +146,74 @@ def plot_spectra(file_core, outfile, xscale="linear"):
 
         row, col = next(rc)
         polns = {}
+    
         for stokes in files:
             reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
             c_stoke = reg_name[-1]
+            specs = {k:v for k,v in zip(["c","marker"], colours[c_stoke])}
+            specs.update(dict(s=marker_size*4.1, label=c_stoke, alpha=0.4))
 
             # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
-            # if c_stoke != "I": 
-            #     print("Not stokes I")
-            #     continue
             
             with np.load(stokes, allow_pickle=True) as data:
-                polns[c_stoke] = data["flux_jybm"].astype(float)
-                waves = data["waves"].astype(float)
-                freqs = data["freqs"] / 1e9
-
-            sp[row, col].plot(
-                waves, polns[c_stoke], colours[c_stoke], 
-                markersize=marker_size, label=c_stoke, alpha=0.4)
-
-        sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-14, size=9)
+                # these frequencies are already in GHZ
+                # flip so that waves increaase
+                freqs = np.flip(data["freqs"])
+                polns[c_stoke] = np.flip(data["flux_jybm"].astype(float))
+            
+            waves = lambda_sq(freqs)
+    
+            # sp[row, col].scatter(waves, polns[c_stoke], **specs)
+        
+        
+        sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
         sp[row, col].set_xscale(xscale)
         sp[row, col].set_yscale(xscale)
+        sp[row, col].xaxis.set_tick_params(labelbottom=True)
 
-        # for power plots
+        del specs["label"]
+        # # for power plots
         # polns["poln_power"] = linear_polzn(polns["Q"], polns["U"])
-        # sp[row, col].plot(waves, polns["poln_power"], colours[c_stoke],
-        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
+        # sp[row, col].scatter(waves, polns["poln_power"], label="poln_power", **specs)
         
         # for fractional polarization
-        # polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
-        # sp[row, col].plot(waves, polns["frac_poln"], colours[c_stoke], 
-        #     markersize=marker_size, label="frac_pol", alpha=0.5)
+        polns["frac_poln"] = fractional_polzn(polns["I"], polns["Q"], polns["U"])
+        specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
         
-        # ax2 = sp[row,col].twinx()
-        # ax2.set_xlim(left=np.min(freqs), right=np.max(freqs))
-        # ax2.set_xlabel("Frequency GHz")
+        sp[row, col].scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
+
+        # adding in the extra x-axis for wavelength
+        new_ticklocs = np.linspace((1.2*waves.min()), (0.9*waves.max()), 8)
+        ax2 = sp[row, col].twiny()
+        ax2.set_xlim(sp[row, col].get_xlim())
+        ax2.set_xticks(new_ticklocs)
+        ax2.set_xticklabels(format_lsq(new_ticklocs, freq_sqrt))
+        ax2.tick_params(axis="x",direction="in", pad=-15)
+
+        if row/rows == 0:
+            plt.setp(ax2, xlabel="Freq GHz")
 
         if np.prod((i+1)%grid_size_sq==0 or (n_qf<grid_size_sq and i==n_qf-1)):
             # Remove empties
-            empties = [i for i, _ in enumerate(sp.flatten()) if not _.lines]
+            empties = [i for i, _ in enumerate(sp.flatten()) if (not _.lines) and (not _.collections)]
             for _ in empties:
                 fig.delaxes(sp.flatten()[_])
             
             logging.info(f"Starting the saving process: Group {int(i/grid_size_sq)}")
-            fig.tight_layout()
-            fig.legend(list(polns.keys()), bbox_to_anchor=(1, 1.01), markerscale=3, ncol=3)
-            # fig.suptitle("Q and U vs Lambda**2")
-            fig.savefig(f"{outfile}-{int(i/grid_size_sq)}", bbox_inches='tight')
+            fig.tight_layout(h_pad=3)
+            legs = active_legends(fig)
+            fig.legend(legs, bbox_to_anchor=(1, 1.01), markerscale=3, ncol=len(legs))
+
+            # fig.suptitle("Q and U vs $\lambda^2$")
+            oname = f"{outfile}-{int(i/grid_size_sq)}-{xscale}"
+            
+            plt.setp(sp[:,0], ylabel="Frac Pol")
+            plt.setp(sp[-1,:], xlabel="Wavelength m$^2$")
+    
+            fig.savefig(oname, bbox_inches='tight')
             plt.close("all")
-            logging.info(f"Plotting done for {outfile}-{int(i/grid_size_sq)}")
+            logging.info(f"Plotting done for {oname}")
 
 
 def make_out_dir(dir_name):
