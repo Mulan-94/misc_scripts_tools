@@ -417,7 +417,9 @@ def plot_spectra(file_core, outfile, xscale="linear"):
         ax2.set_xticks(new_ticklocs)
         ax2.set_xticklabels(format_lsq(new_ticklocs, freq_sqrt))
         ax2.tick_params(axis="x",direction="in", pad=-15)
-        plt.setp(ax2, xlabel="Freq GHz")
+
+        if row/rows == 0:
+            plt.setp(ax2, xlabel="Freq GHz")
 
         if np.prod((i+1)%grid_size_sq==0 or (n_qf<grid_size_sq and i==n_qf-1)):
             # Remove empties
@@ -434,7 +436,7 @@ def plot_spectra(file_core, outfile, xscale="linear"):
             oname = f"{outfile}-{int(i/grid_size_sq)}-{xscale}"
             
             plt.setp(sp[:,0], ylabel="Frac Pol")
-            plt.setp(sp[:,:], xlabel="Wavelength m$^2$")
+            plt.setp(sp[-1,:], xlabel="Wavelength m$^2$")
     
             fig.savefig(oname, bbox_inches='tight')
             plt.close("all")
