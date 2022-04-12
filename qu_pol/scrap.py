@@ -129,7 +129,7 @@ class Plotting:
         Converting and formating output
         Funxtions expdcted lambda_sq, and freq_sqrt
         """
-        inp = getattr(func)(inp)
+        inp = getattr(MathUtils, func)(inp)
         return [float(f"{_:.2f}") for _ in inp]
 
     @staticmethod
@@ -147,7 +147,8 @@ class Plotting:
         return fig, sp
 
     @classmethod
-    def plot_spectra(cls, file_core, outfile, xscale="linear"):
+    def plot_spectra(cls, file_core, outfile, xscale="linear", ymin=None, ymax=None,
+            xmin=None, xmax=None):
         """
         file_core: str
             core of the folders where the data are contained
@@ -163,7 +164,7 @@ class Plotting:
         q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
         u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
         i_files = sorted(glob(f"./I-{file_core}/*.npz"), key=fight)
-
+        
         qui_files = list(zip(q_files, u_files, i_files))
         n_qf = len(q_files)
         logging.info(f"Found {n_qf} QUI files")
@@ -178,7 +179,7 @@ class Plotting:
         plt.close("all")
         for i, files in enumerate(qui_files):
             if i % grid_size_sq == 0:
-                fig, sp = cls.create_figure((rows, cols), fsize=(50, 30), sharey=False)
+                fig, sp = cls.create_figure((rows, cols), fsize=(50, 30), sharey=True)
                 rc = product(range(rows), range(cols))
 
             row, col = next(rc)
@@ -202,7 +203,8 @@ class Plotting:
         
                 # sp[row, col].scatter(waves, polns[c_stoke], **specs)
             
-            
+            sp[row, col].set_ylim(ymax=ymax, ymin=ymin)
+            sp[row, col].set_ylim(xmax=xmax, xmin=xmin)
             sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
             sp[row, col].set_xscale(xscale)
             sp[row, col].set_yscale(xscale)
@@ -225,7 +227,7 @@ class Plotting:
             ax2 = sp[row, col].twiny()
             ax2.set_xlim(sp[row, col].get_xlim())
             ax2.set_xticks(new_ticklocs)
-            ax2.set_xticklabels(cls.format_lsq(new_ticklocs, freq_sqrt))
+            ax2.set_xticklabels(cls.format_lsq(new_ticklocs, "freq_sqrt"))
             ax2.tick_params(axis="x",direction="in", pad=-15)
 
             if row/rows == 0:
@@ -481,27 +483,21 @@ class FitsManip:
         return data_cut
 
     @classmethod
-    @timer
-    def get_image_stats2(cls, file_core, images, regs, noise_reg):
+    def get_image_stats2(cls, file_core, images, regs, noise_reg, sig_factor):
         fluxes, waves = [], []
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
             with futures.ProcessPoolExecutor(max_workers=16) as executor:
                 results = executor.map(
-                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=10), images
+                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
                     )
             
-            # some testbed
+            # # some testbed
             # results = []
             # for im in images:
-            #     if "37b-QU-for-RM-1024-1279-0254-Q-image.fits" not in im:
-            #         continue
-            #     results.append(extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
 
-
-            # Q and U for each freq
-            # outs = {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
             outs = {_: {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
                         for _ in "IQU"}
 
@@ -525,19 +521,37 @@ class FitsManip:
 
 def parser():
     parsing = argparse.ArgumentParser()
+    parsing.add_argument("-f", "--infile", dest="in_list", type=str,
+        default="post.txt", metavar="",
+        help="File containing an organised list of the input image names."+
+        "Can easily be done with 'ls *-image.fits > whatever.txt'")
     parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
         type=int, default=[], metavar="", 
         help="Create regions of this pixel size and perform analyses on them")
+    parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
+        help="Testing prefix. Will be Prepended with '-'", default=None)
+
+    parsing.add_argument("--threshold", dest="noise_thresh", metavar="", type=float,
+        help="Noise threshold above which to extract. This will be x-sigma")
+    
+    
     parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
         help="Plot all the specified region pixels")
+    parsing.add_argument("--ymax", dest="ymax", type=float, 
+        help="Y axis max limit")
+    parsing.add_argument("--ymin", dest="ymin", type=float,
+        help="Y axis min limit")
+    parsing.add_argument("--xmax", dest="xmax", type=float, 
+        help="Y axis max limit")
+    parsing.add_argument("--xmin", dest="xmin", type=float,
+        help="Y axis min limit")
     parsing.add_argument("-p", "--plot", dest="plot", nargs="*", type=int, 
         metavar="",
         help="Make plots for these region sizes manually. These will be linearly scaled")
     parsing.add_argument("-ps", "--plot-scales", dest="plot_scales", metavar="",
         default=["linear"], nargs="*", choices=["linear", "log"],
         help="Scales for the plots. Can be a space separated list of different scales.")
-    parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
-        help="Testing prefix. Will be Prepended with '-'", default=None)
+
     return parsing
 
 
@@ -568,7 +582,7 @@ if __name__ == "__main__":
                 channelised/(\d*)-(\d*)/37b-QU-for-RM-(\d*)-(\d*)-I-(\d{4})-image.fits
             replace: 
                 channelised/$1-$2-I/37b-QU-for-RM-$3-$4-I-$5-image.fits
-        THEY WILL  BE IN POST.TXT
+        THEY WILL  BE IN POST.TXT [Now given as a commandline argument]
         """
 
         for factor in opts.reg_size:
@@ -595,27 +609,34 @@ if __name__ == "__main__":
             #     logging.info(f"And {len(images)} images")
                 
             #     # bn = FitsManip.get_image_stats2(stokes, file_core, images, regs, noise_reg)
-
-            images = IOUtils.read_sorted_filnames("post.txt")
+            images = IOUtils.read_sorted_filnames(opts.in_list)
             logging.info(f"Working on Stokes IQU")
             logging.info(f"With {len(regs)} regions")
             logging.info(f"And {len(images)} images (4096 X IQU)")
-            bn = FitsManip.get_image_stats2(file_core, images, regs, noise_reg)
+            
+            bn = FitsManip.get_image_stats2(file_core, images, regs, noise_reg, sig_factor=opts.noise_thresh)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
                 plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
-                Plotting.plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{factor}")
+                Plotting.plot_spectra(file_core, 
+                    f"{plot_dir}/QU-regions-mpc{testing}{factor}",
+                    ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax)
 
             logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
             logging.info("======================================")
 
     if opts.plot:
+        " python scrap.py -p 50 -t toto"
+
         logging.info(f"Plotting is enabled for regions {opts.plot}")
         for factor in opts.plot:
             for scale in opts.plot_scales:
                 file_core = f"regions-mpc-{factor}{testing}"
                 plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
-                Plotting.plot_spectra(file_core, f"{plot_dir}/QU-regions-mpc{testing}{factor}", xscale=scale)
+                Plotting.plot_spectra(file_core, 
+                    f"{plot_dir}/QU-regions-mpc{testing}{factor}",
+                    xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
+                    xmin=opts.xmin, xmax=opts.xmax)
