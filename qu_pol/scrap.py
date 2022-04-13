@@ -32,7 +32,7 @@ marker_size = 10
 # ignore overflow errors, assume these to be mostly flagged data
 warnings.simplefilter("ignore")
 
-l_handler = logging.FileHandler("xcrapping.log", mode="a")
+l_handler = logging.FileHandler("xcrapping.log", mode="w")
 l_handler.setLevel(logging.INFO)
 
 s_handler = logging.StreamHandler()
@@ -147,8 +147,8 @@ class Plotting:
         return fig, sp
 
     @classmethod
-    def plot_spectra(cls, file_core, outfile, xscale="linear", ymin=None, ymax=None,
-            xmin=None, xmax=None):
+    def plot_spectra(cls, file_core, outfile, xscale="linear", ymin=None,
+        ymax=None, xmin=None, xmax=None, plot_qu=False):
         """
         file_core: str
             core of the folders where the data are contained
@@ -177,12 +177,12 @@ class Plotting:
 
         logging.info("Starting plots")
         plt.close("all")
+        plots = 0
         for i, files in enumerate(qui_files):
             if i % grid_size_sq == 0:
-                fig, sp = cls.create_figure((rows, cols), fsize=(50, 30), sharey=True)
+                fig, sp = cls.create_figure((rows, cols), fsize=(50, 30), sharey=False)
                 rc = product(range(rows), range(cols))
 
-            row, col = next(rc)
             polns = {}
         
             for stokes in files:
@@ -196,15 +196,29 @@ class Plotting:
                 with np.load(stokes, allow_pickle=True) as data:
                     # these frequencies are already in GHZ
                     # flip so that waves increaase
-                    freqs = np.flip(data["freqs"])
-                    polns[c_stoke] = np.flip(data["flux_jybm"].astype(float))
-                
+                    freqs = data["freqs"]
+                    
+                    polns["frac_poln"] = data["frac_poln"]
+                    polns[c_stoke] = data["flux_jybm"].astype(float)
+                    
+
                 waves = MathUtils.lambda_sq(freqs)
-        
-                # sp[row, col].scatter(waves, polns[c_stoke], **specs)
+
+            if not np.all(np.isnan(polns["frac_poln"])):
+                row, col = next(rc)
+                plots +=1
+            else:
+                # print(f"Skipping {row}, {col}")
+                continue
             
-            sp[row, col].set_ylim(ymax=ymax, ymin=ymin)
-            sp[row, col].set_ylim(xmax=xmax, xmin=xmin)
+            if plot_qu:
+                for _ in "IQU":
+                    specs.update({"marker": colours[_][1], "c": colours[_][0], "label":  _})
+                    sp[row, col].scatter(waves, polns[_],**specs)
+
+            if ymax or ymin:
+                sp[row, col].set_ylim(ymax=ymax, ymin=ymin)
+            # sp[row, col].set_xlim(xmax=xmax, xmin=xmin)
             sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
             sp[row, col].set_xscale(xscale)
             sp[row, col].set_yscale(xscale)
@@ -217,7 +231,7 @@ class Plotting:
             # sp[row, col].scatter(waves, polns["poln_power"], label="poln_power", **specs)
             
             # for fractional polarization
-            polns["frac_poln"] = MathUtils.fractional_polzn(polns["I"], polns["Q"], polns["U"])
+            # polns["frac_poln"] = MathUtils.fractional_polzn(polns["I"], polns["Q"], polns["U"])
             specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
             
             sp[row, col].scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
@@ -253,6 +267,7 @@ class Plotting:
                 fig.savefig(oname, bbox_inches='tight')
                 plt.close("all")
                 logging.info(f"Plotting done for {oname}")
+        logging.info(f"We have: {plots}/{n_qf} plots")
 
 
 class MathUtils:
@@ -289,13 +304,21 @@ class MathUtils:
         return np.isinf(inp)
 
     @classmethod
-    def linear_polzn(cls, stokes_q, stokes_u):
-        return cls.sqrt_ssq(stokes_q, stokes_u)
+    def linear_polzn(cls, stokes_q, stokes_u, noise=None, thresh=10):
+        lin_pol = cls.sqrt_ssq(stokes_q, stokes_u)
+
+        if noise:
+            noise_floor = noise * thresh
+            #if there's a value less than noise floor, set it to nan
+            if any(lin_pol < noise_floor):
+                lin_pol[np.where(lin_pol <noise_floor)] = np.nan
+        return np.abs(lin_pol)
 
     @classmethod
-    def fractional_polzn(cls, stokes_i, stokes_q, stokes_u):
-        linear_pol = cls.linear_polzn(stokes_q, stokes_u)
-        frac_pol = linear_pol / stokes_i
+    def fractional_polzn(cls, stokes_i, stokes_q, stokes_u, noise=None, thresh=10):
+        linear_pol = cls.linear_polzn(stokes_q, stokes_u, noise=noise, thresh=thresh)
+        # if not np.all(np.isnan(linear_pol)):
+        frac_pol = linear_pol / np.abs(stokes_i)
         return frac_pol
 
     @staticmethod
@@ -392,6 +415,21 @@ class FitsManip:
             data["freqs"] /= 1e9
         return data
 
+    
+    @classmethod
+    def get_noise(cls, noise_reg, fname, data=None):
+        if not isinstance(noise_reg, regions.Region):
+            noise = noise_reg
+        else:
+            if data is None:
+                im_data = cls.get_useful_data(fname)
+                data = im_data["data"]
+            # Get image noise from standard deviation of a sourceless region
+            noise_cut = cls.get_data_cut(noise_reg, data)
+            noise = np.nanstd(noise_cut)
+        return noise
+
+
     @classmethod
     def extract_stats2(cls, fname, reg, noise_reg, sig_factor=10):
         """
@@ -409,10 +447,7 @@ class FitsManip:
         im_data = cls.get_useful_data(fname)
         data = im_data.pop("data")
 
-        # Get image noise from standard deviation of a sourceless region
-        noise_cut = cls.get_data_cut(noise_reg, data)
-
-        noise = np.nanstd(noise_cut)
+        noise = cls.get_noise(noise_reg, fname, data=data)
 
         # global noise sigma
         # glob_noise = np.nanstd(data)
@@ -429,20 +464,21 @@ class FitsManip:
             return im_data
 
         # flux per beam sum
-        flux_jybm = np.nansum(cls.get_data_cut(reg, data))
+        # flux_jybm = np.nansum(cls.get_data_cut(reg, data))
 
-        # flux_jybm = np.nanmean(intense_cut)
+        flux_jybm = np.nanmean(intense_cut)
 
         # flux in jansky
         # flux_jy = cls.get_flux(hdu_header, flux_jybm)
         flux_jy = None
         
-        if (flux_jybm > sig_factor * noise) and flux_jybm < 0.5e3:
+        # if (flux_jybm > sig_factor * noise):
+        if flux_jybm > noise:
             im_data["flux_jybm"] = flux_jybm
             im_data["flux_jy"] = flux_jy
         else:
             im_data["flux_jybm"] = im_data["flux_jy"] = None
-
+        im_data["noise"] = noise
         return im_data
 
     @staticmethod
@@ -488,33 +524,46 @@ class FitsManip:
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
-            with futures.ProcessPoolExecutor(max_workers=16) as executor:
-                results = executor.map(
-                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
-                    )
+            # with futures.ProcessPoolExecutor(max_workers=16) as executor:
+            #     results = executor.map(
+            #         partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
+            #         )
             
             # # some testbed
-            # results = []
-            # for im in images:
-            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+            results = []
+            for im in images:
+                results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
 
-            outs = {_: {"flux_jy": [],"flux_jybm": [],"waves": [],"freqs": [],"fnames": []}
+            outs = {_: {"flux_jybm": [],"waves": [],"freqs": [],"fnames": [], "noise": []}
                         for _ in "IQU"}
 
-            for res in results:           
-                outs[res["stokes"]]["flux_jy"].append(res["flux_jy"])
+            for res in results:
+                # outs[res["stokes"]]["flux_jy"].append(res["flux_jy"])
                 outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
                 # outs[res["stokes"]]["waves"].append(res["waves"])
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
+                outs[res["stokes"]]["noise"].append(res["noise"])
+            
+            checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
+        
+            if not all(_ is None for _ in checks):
+                for st in "IQU":
+                    outs[st]["flux_jybm"] = np.asarray(outs[st]["flux_jybm"], dtype=np.float)
+                
+                fpol = MathUtils.fractional_polzn(
+                        outs["I"]["flux_jybm"], outs["Q"]["flux_jybm"], 
+                        outs["U"]["flux_jybm"], noise=noise_reg, thresh=sig_factor)
 
-            for stokes, values in outs.items():
-                out_dir = IOUtils.make_out_dir(f"{stokes}-{file_core}")
-                outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
-                np.savez(outfile, **values)
+                outs["I"]["frac_poln"] = outs["Q"]["frac_poln"] = outs["U"]["frac_poln"] = fpol
+
+                for stokes, values in outs.items():
+                    out_dir = IOUtils.make_out_dir(f"{stokes}-{file_core}")
+                    outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
+                    np.savez(outfile, **values)
 
         logging.info(f"Stokes {stokes} done")
-        logging.info("---------------")
+        logging.info( "--------------------")
         return
 
 
@@ -531,12 +580,18 @@ def parser():
     parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
         help="Testing prefix. Will be Prepended with '-'", default=None)
 
-    parsing.add_argument("--threshold", dest="noise_thresh", metavar="", type=float,
-        help="Noise threshold above which to extract. This will be x-sigma")
+    parsing.add_argument("--threshold", dest="thresh", metavar="", type=int,
+        default=10,
+        help="Noise factor threshold above which to extract. This will be threshold * noise_sigma")
+    parsing.add_argument("--noise", dest="noise", metavar="", type=float,
+        default=None,
+        help="Noise value above which to extract. Default is automatic determine.")
     
     
     parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
         help="Plot all the specified region pixels")
+    parsing.add_argument("--plot-iqu", dest="plot_qu", action="store_true",
+        help="Plot Q and U values")
     parsing.add_argument("--ymax", dest="ymax", type=float, 
         help="Y axis max limit")
     parsing.add_argument("--ymin", dest="ymin", type=float,
@@ -558,7 +613,6 @@ def parser():
 if __name__ == "__main__":
     opts = parser().parse_args()
 
-    # for factor in [70, 50, 10, 7, 5, 3]:
     if opts.testing is None:
         testing = ""
     else:
@@ -591,8 +645,7 @@ if __name__ == "__main__":
 
             reg_file = IOUtils.generate_regions(f"regions/beacons", factor=factor)
             regs = regions.Regions.read(reg_file, format="ds9")
-
-            noise_reg = regs.pop(-1)
+            
             # for stokes in "I Q U".split():
                 
             #     if stokes != "I":
@@ -612,9 +665,20 @@ if __name__ == "__main__":
             images = IOUtils.read_sorted_filnames(opts.in_list)
             logging.info(f"Working on Stokes IQU")
             logging.info(f"With {len(regs)} regions")
-            logging.info(f"And {len(images)} images (4096 X IQU)")
+            logging.info(f"And {len(images)} images ({len(images)//3} X IQU)")
+
+            if opts.noise:
+                noise_reg = opts.noise
+            else:
+                noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
+                logging.info(f"Getting noise from {images[0]}")
+                noise_reg = FitsManip.get_noise(noise_reg, images[0], data=None)
             
-            bn = FitsManip.get_image_stats2(file_core, images, regs, noise_reg, sig_factor=opts.noise_thresh)
+            logging.info(f"Noise is       : {noise_reg}")
+            logging.info(f"Sigma threshold: {opts.thresh}")
+            logging.info(f"Noise threshold: {opts.thresh * noise_reg}")
+            
+            bn = FitsManip.get_image_stats2(file_core, images, regs, noise_reg, sig_factor=opts.thresh)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
@@ -622,7 +686,8 @@ if __name__ == "__main__":
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
                 Plotting.plot_spectra(file_core, 
                     f"{plot_dir}/QU-regions-mpc{testing}{factor}",
-                    ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax)
+                    ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax,
+                    plot_qu=opts.plot_qu)
 
             logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
             logging.info("======================================")
@@ -639,4 +704,4 @@ if __name__ == "__main__":
                 Plotting.plot_spectra(file_core, 
                     f"{plot_dir}/QU-regions-mpc{testing}{factor}",
                     xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
-                    xmin=opts.xmin, xmax=opts.xmax)
+                    xmin=opts.xmin, xmax=opts.xmax, plot_qu=opts.plot_qu)
