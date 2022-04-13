@@ -148,7 +148,7 @@ class Plotting:
 
     @classmethod
     def plot_spectra(cls, file_core, outfile, xscale="linear", ymin=None,
-        ymax=None, xmin=None, xmax=None, plot_qu=False):
+        ymax=None, xmin=None, xmax=None, plot_qu=False, plot_frac_pol=True, plot_linear_pol=False):
         """
         file_core: str
             core of the folders where the data are contained
@@ -157,16 +157,17 @@ class Plotting:
         """
         # r: red, b: blue, k: black
         colours = {
-            "Q": "r2", "U": "b1", "I": "ko", 
-            "poln_power": "g+", "frac_poln":"mx"}
-        fight = lambda x: int(os.path.basename(x).split("_")[1])
+            'Q': {'color': 'r', 'marker': '2', "label": "Q"},
+            'U': {'color': 'b', 'marker': '1', "label": "U"},
+            'I': {'color': 'k', 'marker': 'o', "label": "I"},
+            'lpol': {'color': 'g', 'marker': '+', "label": "Linear Poln"},
+            'fpol': {'color': 'm', 'marker': 'x', "label": "Fractional Poln"}
+            }
 
-        q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
-        u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
-        i_files = sorted(glob(f"./I-{file_core}/*.npz"), key=fight)
-        
-        qui_files = list(zip(q_files, u_files, i_files))
-        n_qf = len(q_files)
+        fight = lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])
+
+        data_files = sorted(glob(f"./IQU-{file_core}/*.npz"), key=fight)
+        n_qf = len(data_files)
         logging.info(f"Found {n_qf} QUI files")
 
         # rationale is a 4:3 aspect ratio, max is this value x 3 = 12:9
@@ -178,66 +179,56 @@ class Plotting:
         logging.info("Starting plots")
         plt.close("all")
         plots = 0
-        for i, files in enumerate(qui_files):
+        for i, data_file in enumerate(data_files):
             if i % grid_size_sq == 0:
                 fig, sp = cls.create_figure((rows, cols), fsize=(50, 30), sharey=False)
                 rc = product(range(rows), range(cols))
+            
+            reg_name = os.path.splitext(os.path.basename(data_file))[0].split("_")
+            with np.load(data_file, allow_pickle=True) as data:
+                # these frequencies are already in GHZ
+                datas = {k: v for k, v in data.items()}
+            
+            datas["waves"] = MathUtils.lambda_sq(datas["freqs"])
+            row, col = next(rc)
 
-            polns = {}
-        
-            for stokes in files:
-                reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
-                c_stoke = reg_name[-1]
-                specs = {k:v for k,v in zip(["c","marker"], colours[c_stoke])}
-                specs.update(dict(s=marker_size*4.1, label=c_stoke, alpha=0.4))
+            if plot_frac_pol:
+                specs = colours["fpol"]
+                specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                sp[row, col].scatter(datas["waves"], datas["fpol"], **specs)
 
-                # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
-                
-                with np.load(stokes, allow_pickle=True) as data:
-                    # these frequencies are already in GHZ
-                    # flip so that waves increaase
-                    freqs = data["freqs"]
-                    
-                    polns["frac_poln"] = data["frac_poln"]
-                    polns[c_stoke] = data["flux_jybm"].astype(float)
-                    
 
-                waves = MathUtils.lambda_sq(freqs)
+            if plot_linear_pol:
+                specs = colours["lpol"]
+                specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                sp[row, col].scatter(datas["waves"], datas["lpol"], **specs)
 
-            if not np.all(np.isnan(polns["frac_poln"])):
-                row, col = next(rc)
+
+            if plot_qu:
+                for stoke in "QU":
+                    specs = colours[stoke]
+                    specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                    sp[row, col].scatter(datas["waves"], datas[stoke], **specs)
+
+
+            if not np.all(np.isnan(datas["fpol"])):
                 plots +=1
             else:
-                # print(f"Skipping {row}, {col}")
                 continue
-            
-            if plot_qu:
-                for _ in "IQU":
-                    specs.update({"marker": colours[_][1], "c": colours[_][0], "label":  _})
-                    sp[row, col].scatter(waves, polns[_],**specs)
+
 
             if ymax or ymin:
                 sp[row, col].set_ylim(ymax=ymax, ymin=ymin)
+           
             # sp[row, col].set_xlim(xmax=xmax, xmin=xmin)
+           
             sp[row, col].set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
             sp[row, col].set_xscale(xscale)
             sp[row, col].set_yscale(xscale)
             sp[row, col].xaxis.set_tick_params(labelbottom=True)
 
-            del specs["label"]
-            # # for power plots
-            # polns["poln_power"] = MathUtils.linear_polzn(polns["Q"], polns["U"])
-            # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
-            # sp[row, col].scatter(waves, polns["poln_power"], label="poln_power", **specs)
-            
-            # for fractional polarization
-            # polns["frac_poln"] = MathUtils.fractional_polzn(polns["I"], polns["Q"], polns["U"])
-            specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
-            
-            sp[row, col].scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
-
-            # adding in the extra x-axis for wavelength
-            new_ticklocs = np.linspace((1.2*waves.min()), (0.9*waves.max()), 8)
+           # adding in the extra x-axis for wavelength
+            new_ticklocs = np.linspace((1.2*datas["waves"].min()), (0.9*datas["waves"].max()), 8)
             ax2 = sp[row, col].twiny()
             ax2.set_xlim(sp[row, col].get_xlim())
             ax2.set_xticks(new_ticklocs)
@@ -271,7 +262,7 @@ class Plotting:
 
     @classmethod
     def plot_spectra_singles(cls, file_core, outfile, xscale="linear", ymin=None,
-        ymax=None, xmin=None, xmax=None, plot_qu=False):
+        ymax=None, xmin=None, xmax=None, plot_qu=False, plot_frac_pol=True, plot_linear_pol=False):
         """
         file_core: str
             core of the folders where the data are contained
@@ -280,78 +271,71 @@ class Plotting:
         """
         # r: red, b: blue, k: black
         colours = {
-            "Q": "r2", "U": "b1", "I": "ko", 
-            "poln_power": "g+", "frac_poln":"mx"}
-        fight = lambda x: int(os.path.basename(x).split("_")[1])
+            'Q': {'color': 'r', 'marker': '2', "label": "Q"},
+            'U': {'color': 'b', 'marker': '1', "label": "U"},
+            'I': {'color': 'k', 'marker': 'o', "label": "I"},
+            'lpol': {'color': 'g', 'marker': '+', "label": "Linear Poln"},
+            'fpol': {'color': 'm', 'marker': 'x', "label": "Fractional Poln"}
+            }
 
-        q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
-        u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
-        i_files = sorted(glob(f"./I-{file_core}/*.npz"), key=fight)
-        
-        qui_files = list(zip(q_files, u_files, i_files))
-        n_qf = len(q_files)
+        fight = lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])
+
+        data_files = sorted(glob(f"./IQU-{file_core}/*.npz"), key=fight)
+        n_qf = len(data_files)
         logging.info(f"Found {n_qf} QUI files")
 
         logging.info("Starting plots")
         plt.close("all")
         plots = 0
-        for i, files in enumerate(qui_files):
+        # data_points = []
+        for i, data_file in enumerate(data_files):
             
             fig, sp = cls.create_figure((1, 1), fsize=(16, 9), sharey=False)
+            
+            reg_name = os.path.splitext(os.path.basename(data_file))[0].split("_")
 
-            polns = {}
-        
-            for stokes in files:
-                reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
-                c_stoke = reg_name[-1]
-                specs = {k:v for k,v in zip(["c","marker"], colours[c_stoke])}
-                specs.update(dict(s=marker_size*4.1, label=c_stoke, alpha=0.4))
+            with np.load(data_file, allow_pickle=True) as data:
+                # these frequencies are already in GHZ
+                datas = {k: v for k, v in data.items()}
+            
+            datas["waves"] = MathUtils.lambda_sq(datas["freqs"])
 
-                # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
-                
-                with np.load(stokes, allow_pickle=True) as data:
-                    # these frequencies are already in GHZ
-                    # flip so that waves increaase
-                    freqs = data["freqs"]
-                    
-                    polns["frac_poln"] = data["frac_poln"]
-                    polns[c_stoke] = data["flux_jybm"].astype(float)
-                    
+            if plot_frac_pol:
+                specs = colours["fpol"]
+                specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                sp.scatter(datas["waves"], datas["fpol"], **specs)
 
-                waves = MathUtils.lambda_sq(freqs)
 
-            if not np.all(np.isnan(polns["frac_poln"])):
+            if plot_linear_pol:
+                specs = colours["lpol"]
+                specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                sp.scatter(datas["waves"], datas["lpol"], **specs)
+
+
+            if plot_qu:
+                for stoke in "QU":
+                    specs = colours[stoke]
+                    specs.update(dict(s=marker_size*4.1, alpha=0.7))
+                    sp.scatter(datas["waves"], datas[stoke], **specs)
+
+
+            if not np.all(np.isnan(datas["fpol"])):
                 plots +=1
             else:
                 continue
-            
-            if plot_qu:
-                for _ in "IQU":
-                    specs.update({"marker": colours[_][1], "c": colours[_][0], "label":  _})
-                    sp.scatter(waves, polns[_],**specs)
+
 
             if ymax or ymin:
                 sp.set_ylim(ymax=ymax, ymin=ymin)
             # sp.set_xlim(xmax=xmax, xmin=xmin)
+            
             sp.set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
             sp.set_xscale(xscale)
             sp.set_yscale(xscale)
             sp.xaxis.set_tick_params(labelbottom=True)
 
-            del specs["label"]
-            # # # for power plots
-            # polns["poln_power"] = MathUtils.linear_polzn(polns["Q"], polns["U"])
-            # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
-            # sp.scatter(waves, polns["poln_power"], label="poln_power", **specs)
-            
-            # for fractional polarization
-            # polns["frac_poln"] = MathUtils.fractional_polzn(polns["I"], polns["Q"], polns["U"])
-            specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
-            
-            sp.scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
-
             # adding in the extra x-axis for wavelength
-            new_ticklocs = np.linspace((1.2*waves.min()), (0.9*waves.max()), 8)
+            new_ticklocs = np.linspace((1.2*datas["waves"].min()), (0.9*datas["waves"].max()), 8)
             ax2 = sp.twiny()
             ax2.set_xlim(sp.get_xlim())
             ax2.set_xticks(new_ticklocs)
@@ -363,11 +347,13 @@ class Plotting:
                
                 
             fig.tight_layout(h_pad=3)
-            legs = cls.active_legends(fig)
-            fig.legend(legs, bbox_to_anchor=(1, 1.01), markerscale=3, ncol=len(legs))
+            # legs = cls.active_legends(fig)
+            # fig.legend(legs, bbox_to_anchor=(1, 1.01), markerscale=3, ncol=len(legs))
+            sp.legend(bbox_to_anchor=(1, 1.05), markerscale=3, ncol=4)
 
             # fig.suptitle("Q and U vs $\lambda^2$")
-            oname = f"{outfile}-{'_'.join(reg_name[:-1])}-{xscale}"
+            
+            oname = f"{outfile}-{'_'.join(reg_name)}-{xscale}"
             
             plt.setp(sp, ylabel="Frac Pol")
             plt.setp(sp, xlabel="Wavelength m$^2$")
@@ -376,6 +362,7 @@ class Plotting:
             plt.close("all")
             logging.info(f"Plotting done for {oname}")
         logging.info(f"We have: {plots}/{n_qf} plots")
+        # logging.info(f"Regions with >4 data points in fracpol {data_points}")
 
 
 
@@ -416,18 +403,17 @@ class MathUtils:
     def linear_polzn(cls, stokes_q, stokes_u, noise=None, thresh=10):
         lin_pol = cls.sqrt_ssq(stokes_q, stokes_u)
 
-        if noise:
-            noise_floor = noise * thresh
-            #if there's a value less than noise floor, set it to nan
-            if any(lin_pol < noise_floor):
-                lin_pol[np.where(lin_pol <noise_floor)] = np.nan
-        return np.abs(lin_pol)
+        # if noise:
+        #     noise_floor = noise * thresh
+        #     #if there's a value less than noise floor, set it to nan
+        #     if any(lin_pol < noise_floor):
+        #         lin_pol[np.where(lin_pol <noise_floor)] = np.nan
+        return lin_pol
 
     @classmethod
     def fractional_polzn(cls, stokes_i, stokes_q, stokes_u, noise=None, thresh=10):
         linear_pol = cls.linear_polzn(stokes_q, stokes_u, noise=noise, thresh=thresh)
-        # if not np.all(np.isnan(linear_pol)):
-        frac_pol = linear_pol / np.abs(stokes_i)
+        frac_pol = linear_pol / stokes_i
         return frac_pol
 
     @staticmethod
@@ -558,8 +544,6 @@ class FitsManip:
 
         noise = cls.get_noise(noise_reg, fname, data=data)
 
-        # global noise sigma
-        # glob_noise = np.nanstd(data)
         
         # Get mean flux over the pixels
         intense_cut = cls.get_data_cut(reg, data)
@@ -575,11 +559,13 @@ class FitsManip:
 
         # flux per beam sum
         # flux_jybm = np.nansum(cls.get_data_cut(reg, data))
+        
+        # flux_jybm = np.nanmean(intense_cut)
+        cpixx, cpixy = np.array(intense_cut.shape)//2
+        flux_jybm = intense_cut[cpixx, cpixy]
 
-        flux_jybm = np.nanmean(intense_cut)
-
-        # if (flux_jybm > sig_factor * noise):
-        if flux_jybm > noise:
+        if (flux_jybm > sig_factor * noise):
+        # if flux_jybm > noise:
             im_data["flux_jybm"] = flux_jybm
         else:
             im_data["flux_jybm"] = None
@@ -629,15 +615,15 @@ class FitsManip:
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
-            with futures.ProcessPoolExecutor(max_workers=16) as executor:
-                results = executor.map(
-                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
-                    )
+            # with futures.ProcessPoolExecutor(max_workers=16) as executor:
+            #     results = executor.map(
+            #         partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
+            #         )
             
             # # some testbed
-            # results = []
-            # for im in images:
-            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+            results = []
+            for im in images:
+                results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
 
             outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": []}
                         for _ in "IQU"}
@@ -651,21 +637,21 @@ class FitsManip:
             checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
         
             if not all(_ is None for _ in checks):
-                for st in "IQU":
-                    outs[st]["flux_jybm"] = np.asarray(outs[st]["flux_jybm"], dtype=np.float)
+                # contains I, Q, U, noise, freqs, fpol, lpol
+                fout = {k: np.asarray(v["flux_jybm"], dtype=np.float) for k,v in outs.items()}
+                fout.update({v: outs["I"][v] for v in ["noise", "freqs"]})
                 
-                fpol = MathUtils.fractional_polzn(
-                        outs["I"]["flux_jybm"], outs["Q"]["flux_jybm"], 
-                        outs["U"]["flux_jybm"], noise=noise_reg, thresh=sig_factor)
+                fout["lpol"] = MathUtils.linear_polzn(fout["Q"], fout["U"],
+                        noise=noise_reg, thresh=sig_factor)
 
-                outs["I"]["frac_poln"] = outs["Q"]["frac_poln"] = outs["U"]["frac_poln"] = fpol
+                fout["fpol"] = MathUtils.fractional_polzn(fout["I"], fout["Q"],
+                    fout["U"], noise=noise_reg, thresh=sig_factor)
 
-                for stokes, values in outs.items():
-                    out_dir = IOUtils.make_out_dir(f"{stokes}-{file_core}")
-                    outfile = os.path.join(out_dir, f"{reg.meta['label']}_{stokes}")
-                    np.savez(outfile, **values)
+                out_dir = IOUtils.make_out_dir(f"IQU-{file_core}")
+                outfile = os.path.join(out_dir, f"{reg.meta['label']}")
+                np.savez(outfile, **fout)
 
-        logging.info(f"Stokes {stokes} done")
+        logging.info(f"Done saving data files")
         logging.info( "--------------------")
         return
 
@@ -691,6 +677,8 @@ def parser():
         help="Noise value above which to extract. Default is automatic determine.")
     
     #plotting arguments
+    parsing.add_argument("--plot-grid", dest="plot_grid", action="store_true",
+        help="Enable to make gridded plots")
     parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
         help="Plot all the specified region pixels")
     parsing.add_argument("-piqu", "--plot-iqu", dest="plot_qu", action="store_true",
@@ -724,6 +712,8 @@ if __name__ == "__main__":
         testing = ""
     else:
         testing = "-" + opts.testing
+
+    plotter = Plotting.plot_spectra if opts.plot_grid else Plotting.plot_spectra_singles
 
     if opts.reg_size:
         sortkey = lambda x: int(os.path.basename(x).split("-")[0])
@@ -789,12 +779,13 @@ if __name__ == "__main__":
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
-                plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
+                plot_dir = IOUtils.make_out_dir(f"plots-IQU-{file_core}")
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
-                Plotting.plot_spectra(file_core, 
-                    f"{plot_dir}/QU-regions-mpc{testing}{factor}",
+                plotter(file_core, 
+                    f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
                     ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax,
-                    plot_qu=opts.plot_qu)
+                    plot_qu=opts.plot_qu, plot_frac_pol=opts.plot_frac_pol,
+                    plot_linear_pol=opts.plot_linear_pol)
 
             logging.info(f"Finished factor {factor} in {perf_counter() - start} seconds")
             logging.info("======================================")
@@ -808,7 +799,9 @@ if __name__ == "__main__":
                 file_core = f"regions-mpc-{factor}{testing}"
                 plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
-                Plotting.plot_spectra_singles(file_core, 
-                    f"{plot_dir}/QU-regions-mpc{testing}{factor}",
+                plotter(file_core, 
+                    f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
                     xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
-                    xmin=opts.xmin, xmax=opts.xmax, plot_qu=opts.plot_qu)
+                    xmin=opts.xmin, xmax=opts.xmax, plot_qu=opts.plot_qu,
+                    plot_frac_pol=opts.plot_frac_pol,
+                    plot_linear_pol=opts.plot_linear_pol)
