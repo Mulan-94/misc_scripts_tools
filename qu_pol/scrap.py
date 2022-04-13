@@ -269,6 +269,115 @@ class Plotting:
                 logging.info(f"Plotting done for {oname}")
         logging.info(f"We have: {plots}/{n_qf} plots")
 
+    @classmethod
+    def plot_spectra_singles(cls, file_core, outfile, xscale="linear", ymin=None,
+        ymax=None, xmin=None, xmax=None, plot_qu=False):
+        """
+        file_core: str
+            core of the folders where the data are contained
+        outfile: str
+            prefix name of the output file
+        """
+        # r: red, b: blue, k: black
+        colours = {
+            "Q": "r2", "U": "b1", "I": "ko", 
+            "poln_power": "g+", "frac_poln":"mx"}
+        fight = lambda x: int(os.path.basename(x).split("_")[1])
+
+        q_files = sorted(glob(f"./Q-{file_core}/*.npz"), key=fight)
+        u_files = sorted(glob(f"./U-{file_core}/*.npz"), key=fight)
+        i_files = sorted(glob(f"./I-{file_core}/*.npz"), key=fight)
+        
+        qui_files = list(zip(q_files, u_files, i_files))
+        n_qf = len(q_files)
+        logging.info(f"Found {n_qf} QUI files")
+
+        logging.info("Starting plots")
+        plt.close("all")
+        plots = 0
+        for i, files in enumerate(qui_files):
+            
+            fig, sp = cls.create_figure((1, 1), fsize=(16, 9), sharey=False)
+
+            polns = {}
+        
+            for stokes in files:
+                reg_name = os.path.splitext(os.path.basename(stokes))[0].split("_")
+                c_stoke = reg_name[-1]
+                specs = {k:v for k,v in zip(["c","marker"], colours[c_stoke])}
+                specs.update(dict(s=marker_size*4.1, label=c_stoke, alpha=0.4))
+
+                # logging.info(f"Reg {reg_name[1]}, Stokes {stokes}")
+                
+                with np.load(stokes, allow_pickle=True) as data:
+                    # these frequencies are already in GHZ
+                    # flip so that waves increaase
+                    freqs = data["freqs"]
+                    
+                    polns["frac_poln"] = data["frac_poln"]
+                    polns[c_stoke] = data["flux_jybm"].astype(float)
+                    
+
+                waves = MathUtils.lambda_sq(freqs)
+
+            if not np.all(np.isnan(polns["frac_poln"])):
+                plots +=1
+            else:
+                continue
+            
+            if plot_qu:
+                for _ in "IQU":
+                    specs.update({"marker": colours[_][1], "c": colours[_][0], "label":  _})
+                    sp.scatter(waves, polns[_],**specs)
+
+            if ymax or ymin:
+                sp.set_ylim(ymax=ymax, ymin=ymin)
+            # sp.set_xlim(xmax=xmax, xmin=xmin)
+            sp.set_title(f"Reg {reg_name[1]}", y=1.0, pad=-20, size=9)
+            sp.set_xscale(xscale)
+            sp.set_yscale(xscale)
+            sp.xaxis.set_tick_params(labelbottom=True)
+
+            del specs["label"]
+            # # # for power plots
+            # polns["poln_power"] = MathUtils.linear_polzn(polns["Q"], polns["U"])
+            # specs.update({k:v for k,v in zip(["c","marker"], colours["poln_power"])})
+            # sp.scatter(waves, polns["poln_power"], label="poln_power", **specs)
+            
+            # for fractional polarization
+            # polns["frac_poln"] = MathUtils.fractional_polzn(polns["I"], polns["Q"], polns["U"])
+            specs.update({k:v for k,v in zip(["c","marker"], colours["frac_poln"])})
+            
+            sp.scatter(waves, polns["frac_poln"], label="frac_poln", **specs)
+
+            # adding in the extra x-axis for wavelength
+            new_ticklocs = np.linspace((1.2*waves.min()), (0.9*waves.max()), 8)
+            ax2 = sp.twiny()
+            ax2.set_xlim(sp.get_xlim())
+            ax2.set_xticks(new_ticklocs)
+            ax2.set_xticklabels(cls.format_lsq(new_ticklocs, "freq_sqrt"))
+            ax2.tick_params(axis="x",direction="in", pad=-15)
+
+            
+            plt.setp(ax2, xlabel="Freq GHz")
+               
+                
+            fig.tight_layout(h_pad=3)
+            legs = cls.active_legends(fig)
+            fig.legend(legs, bbox_to_anchor=(1, 1.01), markerscale=3, ncol=len(legs))
+
+            # fig.suptitle("Q and U vs $\lambda^2$")
+            oname = f"{outfile}-{'_'.join(reg_name[:-1])}-{xscale}"
+            
+            plt.setp(sp, ylabel="Frac Pol")
+            plt.setp(sp, xlabel="Wavelength m$^2$")
+    
+            fig.savefig(oname, bbox_inches='tight')
+            plt.close("all")
+            logging.info(f"Plotting done for {oname}")
+        logging.info(f"We have: {plots}/{n_qf} plots")
+
+
 
 class MathUtils:
     def __init__(self):
@@ -460,7 +569,8 @@ class FitsManip:
             MathUtils.is_infinite(noise)):
             # skip all the nonsence if all the data is Nan
             logging.debug(f"Skipping region:{reg.meta['label']} {fname} because NaN/Zeroes/inf ")
-            im_data["flux_jybm"] = im_data["flux_jy"] = None
+            # im_data["flux_jybm"] = im_data["flux_jy"] = None
+            im_data["flux_jybm"] = None
             return im_data
 
         # flux per beam sum
@@ -468,16 +578,11 @@ class FitsManip:
 
         flux_jybm = np.nanmean(intense_cut)
 
-        # flux in jansky
-        # flux_jy = cls.get_flux(hdu_header, flux_jybm)
-        flux_jy = None
-        
         # if (flux_jybm > sig_factor * noise):
         if flux_jybm > noise:
             im_data["flux_jybm"] = flux_jybm
-            im_data["flux_jy"] = flux_jy
         else:
-            im_data["flux_jybm"] = im_data["flux_jy"] = None
+            im_data["flux_jybm"] = None
         im_data["noise"] = noise
         return im_data
 
@@ -524,23 +629,21 @@ class FitsManip:
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
-            # with futures.ProcessPoolExecutor(max_workers=16) as executor:
-            #     results = executor.map(
-            #         partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
-            #         )
+            with futures.ProcessPoolExecutor(max_workers=16) as executor:
+                results = executor.map(
+                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
+                    )
             
             # # some testbed
-            results = []
-            for im in images:
-                results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+            # results = []
+            # for im in images:
+            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
 
-            outs = {_: {"flux_jybm": [],"waves": [],"freqs": [],"fnames": [], "noise": []}
+            outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": []}
                         for _ in "IQU"}
 
             for res in results:
-                # outs[res["stokes"]]["flux_jy"].append(res["flux_jy"])
                 outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
-                # outs[res["stokes"]]["waves"].append(res["waves"])
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
                 outs[res["stokes"]]["noise"].append(res["noise"])
@@ -587,11 +690,15 @@ def parser():
         default=None,
         help="Noise value above which to extract. Default is automatic determine.")
     
-    
+    #plotting arguments
     parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
         help="Plot all the specified region pixels")
-    parsing.add_argument("--plot-iqu", dest="plot_qu", action="store_true",
+    parsing.add_argument("-piqu", "--plot-iqu", dest="plot_qu", action="store_true",
         help="Plot Q and U values")
+    parsing.add_argument("-pfp", "--plot-frac-pol", dest="plot_frac_pol", action="store_true",
+        help="Plot Fractional polarization")
+    parsing.add_argument("-plp", "--plot-linear-pol", dest="plot_linear_pol", action="store_true",
+        help="Plot linear polarization power")
     parsing.add_argument("--ymax", dest="ymax", type=float, 
         help="Y axis max limit")
     parsing.add_argument("--ymin", dest="ymin", type=float,
@@ -701,7 +808,7 @@ if __name__ == "__main__":
                 file_core = f"regions-mpc-{factor}{testing}"
                 plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
                 pout = os.path.join(plot_dir,  f"QU-{file_core}")
-                Plotting.plot_spectra(file_core, 
+                Plotting.plot_spectra_singles(file_core, 
                     f"{plot_dir}/QU-regions-mpc{testing}{factor}",
                     xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
                     xmin=opts.xmin, xmax=opts.xmax, plot_qu=opts.plot_qu)
