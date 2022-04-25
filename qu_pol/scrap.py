@@ -1,3 +1,4 @@
+#!/bin/python3
 """
 References
 ==========
@@ -165,7 +166,6 @@ class Plotting:
             }
 
         fight = lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])
-
         data_files = sorted(glob(f"./IQU-{file_core}/*.npz"), key=fight)
         n_qf = len(data_files)
         logging.info(f"Found {n_qf} QUI files")
@@ -186,7 +186,7 @@ class Plotting:
             
             reg_name = os.path.splitext(os.path.basename(data_file))[0].split("_")
             with np.load(data_file, allow_pickle=True) as data:
-                # these frequencies are already in GHZ
+                # these frequencies are in Hz
                 datas = {k: v for k, v in data.items()}
             
             datas["waves"] = MathUtils.lambda_sq(datas["freqs"])
@@ -420,7 +420,6 @@ class MathUtils:
     def lambda_sq(freq_ghz):
         #speed of light in a vacuum
         global light_speed
-        freq_ghz = freq_ghz * 1e9
         # frequency to wavelength
         wave = light_speed/freq_ghz
         return np.square(wave)
@@ -432,7 +431,7 @@ class MathUtils:
 
         lamsq = np.sqrt(lamsq)
         # frequency to wavelength
-        freq_ghz = (light_speed/lamsq)/1e9
+        freq_ghz = (light_speed/lamsq)
         return freq_ghz
 
 
@@ -507,7 +506,6 @@ class FitsManip:
             data["freqs"] = hdul[0].header["CRVAL3"]
             data["fnames"] = fname
             data["data"] = hdul[0].data.squeeze()
-            data["freqs"] /= 1e9
         return data
 
     
@@ -554,14 +552,15 @@ class FitsManip:
             # skip all the nonsence if all the data is Nan
             logging.debug(f"Skipping region:{reg.meta['label']} {fname} because NaN/Zeroes/inf ")
             # im_data["flux_jybm"] = im_data["flux_jy"] = None
-            im_data["flux_jybm"] = None
+            im_data["flux_jybm"] = im_data["noise"] = None
             return im_data
 
         # flux per beam sum
         # flux_jybm = np.nansum(cls.get_data_cut(reg, data))
         
         # flux_jybm = np.nanmean(intense_cut)
-        cpixx, cpixy = np.array(intense_cut.shape)//2
+        # cpixx, cpixy = np.array(intense_cut.shape)//2
+        cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
         flux_jybm = intense_cut[cpixx, cpixy]
 
         if (flux_jybm > sig_factor * noise):
@@ -569,6 +568,7 @@ class FitsManip:
             im_data["flux_jybm"] = flux_jybm
         else:
             im_data["flux_jybm"] = None
+    
         im_data["noise"] = noise
         return im_data
 
@@ -615,15 +615,15 @@ class FitsManip:
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
-            # with futures.ProcessPoolExecutor(max_workers=16) as executor:
-            #     results = executor.map(
-            #         partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
-            #         )
+            with futures.ProcessPoolExecutor(max_workers=16) as executor:
+                results = executor.map(
+                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
+                    )
             
             # # some testbed
-            results = []
-            for im in images:
-                results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=10))
+            # results = []
+            # for im in images:
+            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor))
 
             outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": []}
                         for _ in "IQU"}
@@ -658,11 +658,31 @@ class FitsManip:
 
 
 def parser():
+    print(
+        """
+        \r===================================================================+
+        \rExamples                                                           |                 
+        \r========                                                           |                                
+        \r\nplotting only                                                    |                                           
+        \r    python scrap.py -p 50 20 -t mzima-t10 -plp -piqu --plot-grid   |
+        \r\nstats and plotting                                               |                                             
+        \r    python scrap.py -f clean-small.txt -rs 50 20 -ap \             |
+        \r          -t mzima-t10-v2 --threshold 10 \                         |
+        \r          --noise -0.0004 -ap -plp -piqu                           | 
+        \r\nwith region files                                                |
+        \r      python scrap.py -rf regions/beacons-20-chosen.reg \          |
+        \r        -f clean-small.txt -rs 20 -t chosen --threshold 10         |                                           
+        \r===================================================================+
+        """
+    )
     parsing = argparse.ArgumentParser()
     parsing.add_argument("-f", "--infile", dest="in_list", type=str,
         default="post.txt", metavar="",
         help="File containing an organised list of the input image names."+
         "Can easily be done with 'ls *-image.fits > whatever.txt'")
+    parsing.add_argument("-rf", "--region-file", dest="reg_file", type=str,
+        default=None, metavar="", 
+        help="An input region file. Otherwise, one will be generated.")
     parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
         type=int, default=[], metavar="", 
         help="Create regions of this pixel size and perform analyses on them")
@@ -739,26 +759,15 @@ if __name__ == "__main__":
         for factor in opts.reg_size:
             start = perf_counter()
             file_core = f"regions-mpc-{factor}{testing}"
-
-            reg_file = IOUtils.generate_regions(f"regions/beacons", factor=factor)
+            
+            if opts.reg_file:
+                reg_file = opts.reg_file
+                logging.info(f"Using {reg_file} as region file")
+            else:
+                reg_file = IOUtils.generate_regions(f"regions/beacons", factor=factor)
+            
             regs = regions.Regions.read(reg_file, format="ds9")
             
-            # for stokes in "I Q U".split():
-                
-            #     if stokes != "I":
-            #         images = sorted(glob(f"./channelised/*-*"), key=sortkey)
-            #         sstring = f"/*[0-9][0-9][0-9][0-9]-{stokes}-*image*"
-            #     else:
-            #         images = sorted(glob(f"./channelised/*-*-I"), key=sortkey)
-            #         sstring = f"/*{stokes}-[0-9][0-9][0-9][0-9]-*image*"
-                
-            #     images = list(chain.from_iterable([sorted(glob(im+sstring)) for im in images]))
-                
-            #     logging.info(f"Working on Stokes {stokes}")
-            #     logging.info(f"With {len(regs)} regions")
-            #     logging.info(f"And {len(images)} images")
-                
-            #     # bn = FitsManip.get_image_stats2(stokes, file_core, images, regs, noise_reg)
             images = IOUtils.read_sorted_filnames(opts.in_list)
             logging.info(f"Working on Stokes IQU")
             logging.info(f"With {len(regs)} regions")
@@ -780,7 +789,7 @@ if __name__ == "__main__":
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
                 plot_dir = IOUtils.make_out_dir(f"plots-IQU-{file_core}")
-                pout = os.path.join(plot_dir,  f"QU-{file_core}")
+                pout = os.path.join(plot_dir,  f"IQU-{file_core}")
                 plotter(file_core, 
                     f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
                     ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax,
@@ -797,8 +806,8 @@ if __name__ == "__main__":
         for factor in opts.plot:
             for scale in opts.plot_scales:
                 file_core = f"regions-mpc-{factor}{testing}"
-                plot_dir = IOUtils.make_out_dir(f"plots-QU-{file_core}")
-                pout = os.path.join(plot_dir,  f"QU-{file_core}")
+                plot_dir = IOUtils.make_out_dir(f"plots-IQU-{file_core}")
+                pout = os.path.join(plot_dir,  f"IQU-{file_core}")
                 plotter(file_core, 
                     f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
                     xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
