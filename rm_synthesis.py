@@ -8,6 +8,10 @@ import matplotlib.pyplot as plt
 # matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
 from scipy import signal
 
+# setting this to qu_po because of its location in the misc_scripts_and_tools
+# see https://stackoverflow.com/questions/61532337/python-modulenotfounderror-no-module-named
+from qu_pol.scrap import IOUtils
+
 from ipdb import set_trace
 
 plt.style.use("seaborn")
@@ -71,6 +75,7 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
     phi_pad = np.arange(-pad, pad, dpad)
     dshift = int(pad/(2.0 * dpad))
 
+    rmsf_orig = lambda_to_faraday(lam2, phi_range, 1) 
     rmsf_fixed = lambda_to_faraday(lam2, phi_pad, 1) 
     components = np.zeros([len(phi_range)], dtype=complex)
 
@@ -92,8 +97,7 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
 
     Fres = fspectrum
     fclean = signal.convolve(components, Gauss, mode='same') + Fres
-
-    return fclean, components
+    return fclean, components, rmsf_orig
 
 
 
@@ -254,10 +258,10 @@ def rm_synthesis(lambda_sq, lpol, phi_max=5000, phi_step=10, niter=1000, gain=0.
     
     if clean:
         
-        # fclean, fcomp = rm_clean(lambda_sq, phi_range, fdirty.copy(), 
-        #             niter=niter, gain=gain)
-        fclean = lexy_rm_clean(lambda_sq, phi_range, fdirty, n_iterations=500, loop_gain=0.1, threshold=None)
-        outs.update({"fclean": fclean, "fcomp": None })
+        fclean, fcomp, rmsf = rm_clean(lambda_sq, phi_range, fdirty.copy(), 
+                    niter=niter, gain=gain)
+        # fclean = lexy_rm_clean(lambda_sq, phi_range, fdirty, n_iterations=500, loop_gain=0.1, threshold=None)
+        outs.update({"fclean": fclean, "fcomp": None, "rmsf": rmsf })
 
     return outs
 
@@ -348,6 +352,7 @@ if __name__ == "__main__":
     for data_file in data_files:
         reg_num = os.path.splitext(os.path.basename(data_file))[0].split("_")[-1]
 
+        print(f"Dealing with {data_file}")
         datas = read_npz(data_file)
         freq, stokes_q, stokes_u, stokes_i = (
             datas["freqs"], datas["Q"], datas["U"], datas["I"])
@@ -368,37 +373,43 @@ if __name__ == "__main__":
 
         rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
             phi_step=opts.depth_step, clean=True)
+        
+        del rm_products["fcomp"]
+        out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + "-depths")
+        outfile = os.path.join(out_dir, f"reg_{reg_num}.npz")
+        print(f"Saving to: {outfile}")
+        np.savez(outfile, **rm_products)
 
-        #plotting everything
-        plt.close("all")
-        fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
+        # #plotting everything
+        # plt.close("all")
+        # fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
 
-        ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
-        #ax[0].plot(lam2, linear_pol.real, 'b.', label='Q')
-        #ax[0].plot(lam2, linear_pol.imag, 'r.', label='U')
-        ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-        ax[0].set_ylabel('Polarisation Intensity [Jy beam$^{-1}$')
-        ax[0].legend(loc='best')
+        # ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
+        # #ax[0].plot(lam2, linear_pol.real, 'b.', label='Q')
+        # #ax[0].plot(lam2, linear_pol.imag, 'r.', label='U')
+        # ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+        # ax[0].set_ylabel('Polarisation Intensity [Jy beam$^{-1}$')
+        # ax[0].legend(loc='best')
 
-        ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
-        #ax[1].plot(rm_products['depths'], rm_products['fdirty'].real, 'b', label='real')
-        #ax[1].plot(rm_products['depths'], rm_products['fdirty'].imag, 'r', label='imag')
+        # ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
+        # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].real, 'b', label='real')
+        # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].imag, 'r', label='imag')
 
-        if "fclean" in rm_products:
-            ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
+        # if "fclean" in rm_products:
+        #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
 
-        # if "fcomp" in rm_products:
-        #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fcomp']), 'orangered', label='Clean Amp')
+        # # if "fcomp" in rm_products:
+        # #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fcomp']), 'orangered', label='Clean Amp')
 
         
 
-        ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
-        ax[1].set_ylabel('Polarisation Intensity')
-        ax[1].legend(loc='best')
+        # ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
+        # ax[1].set_ylabel('Polarisation Intensity')
+        # ax[1].legend(loc='best')
 
-        fig.tight_layout()
-        oname = os.path.join(output_dir, f"reg_{reg_num}.png")
-        fig.savefig(oname)
+        # fig.tight_layout()
+        # oname = os.path.join(output_dir, f"reg_{reg_num}.png")
+        # fig.savefig(oname)
 
 
 

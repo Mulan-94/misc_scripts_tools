@@ -70,6 +70,59 @@ class IOUtils:
         return items
 
     @staticmethod
+    def choose_valid_regs(fname, reg, noise_reg, threshold=20):
+        """
+        Extract statistics from a specified image region
+        fname :obj:`str`
+            FITS image name for some stokes I
+        reg: :obj:`regions.Region`
+            A region object
+        noise_reg: :obj:`regions.region`
+            A specified know noise region object
+        threshold: :obj:`int | float`
+            I tested 20, seems better than most. I recommend
+        """
+
+        # get image data
+        im_data = FitsManip.get_useful_data(fname)
+        data = im_data.pop("data")
+
+        image_noise = FitsManip.get_noise(noise_reg, fname, data=data)
+        # Get mean flux over the pixels
+        intense_cut = FitsManip.get_data_cut(reg, data)
+
+
+        if np.std(intense_cut) > threshold*image_noise:
+            return True
+        else:
+            return False
+
+    @classmethod
+    def write_valid_regions(cls, regfile, fname, threshold=20):
+
+        # read whatever was written out to begin with
+        logging.info("Determining valid regions")
+        with open(regfile, "r") as fil:
+            lines = fil.readlines()
+
+        regs = regions.Regions.read(regfile, format="ds9")
+        noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
+
+        #identify what is thought to be valid
+        chosen = []
+        for _, reg in enumerate(regs):
+            vals = cls.choose_valid_regs(fname, reg, noise_reg, threshold=threshold)
+            if vals:
+                chosen.append(_)
+        
+        logging.info(f"{len(chosen)} / {len(regs)} regions found to be valid")
+        logging.info(f"Overwriting into {regfile}")
+        #write back to the same file the valid regions
+        with open(regfile, "w") as fil:
+            nlines = lines[:3] + [lines[c+3] for c in chosen]
+            fil.writelines(nlines)
+
+    @staticmethod
     def generate_regions(reg_fname, factor=50, max_w=572, max_h=572):
         """
         Create a DS9 region file containing a bunch of regions
@@ -85,7 +138,7 @@ class IOUtils:
         width_range = 74, 569
 
         # bottom to top
-        height_range = 190, 450
+        height_range = 145, 450
         header = [
             "# Region file format: DS9 CARTA 2.0.0",
             ('global color=green dashlist=8 3 width=1 ' +
@@ -96,6 +149,21 @@ class IOUtils:
 
         pts = []
         count = 0
+        heights = list(range(*height_range, factor))
+        widths = list(range(*width_range, factor))
+
+        if max(heights) < max(height_range):
+            heights.append(max(height_range))
+            
+        if min(heights) < min(height_range):
+            heights.append(min(height_range))
+
+
+        if max(widths) < max(width_range):
+            widths.append(max(width_range))
+        if min(widths) < min(width_range):
+            widths.append(min(width_range))
+
         for height in range(*height_range, factor):
             for width in range(*width_range, factor):
                 # pts.append("circle({}, {}, {}) # color=#2EE6D6 width=2".format(width, height+factor, factor/2))
@@ -400,8 +468,8 @@ class MathUtils:
         return np.isinf(inp)
 
     @classmethod
-    def linear_polzn(cls, stokes_q, stokes_u, noise=None, thresh=10):
-        lin_pol = cls.sqrt_ssq(stokes_q, stokes_u)
+    def linear_polzn_power(cls, stokes_q, stokes_u, noise=None, thresh=10):
+        lin_pol = np.abs(cls.linear_polzn(stokes_q, stokes_u))
 
         # if noise:
         #     noise_floor = noise * thresh
@@ -411,9 +479,15 @@ class MathUtils:
         return lin_pol
 
     @classmethod
+    def linear_polzn(cls, stokes_q, stokes_u):
+        lin_pol = stokes_q + (1j*stokes_u)
+        return lin_pol
+
+    @classmethod
     def fractional_polzn(cls, stokes_i, stokes_q, stokes_u, noise=None, thresh=10):
-        linear_pol = cls.linear_polzn(stokes_q, stokes_u, noise=noise, thresh=thresh)
-        frac_pol = linear_pol / stokes_i
+        # linear_pol = cls.linear_polzn(stokes_q, stokes_u, noise=noise, thresh=thresh)
+        # frac_pol = linear_pol / stokes_i
+        frac_pol = (stokes_q/stokes_i) + (1j * stokes_u/stokes_i)
         return frac_pol
 
     @staticmethod
@@ -524,7 +598,7 @@ class FitsManip:
 
 
     @classmethod
-    def extract_stats2(cls, fname, reg, noise_reg, sig_factor=10):
+    def extract_stats2(cls, fname, reg, global_noise, noise_reg, sig_factor=10):
         """
         Extract statistics from a specified image region
         fname :obj:`str`
@@ -536,40 +610,34 @@ class FitsManip:
         sig_factor: :obj:`int | float`
             Sigma factor. Threshold above which signal should be above noise
         """
+    
         # get image data
         im_data = cls.get_useful_data(fname)
         data = im_data.pop("data")
 
-        noise = cls.get_noise(noise_reg, fname, data=data)
-
-        
+        image_noise = cls.get_noise(noise_reg, fname, data=data)
         # Get mean flux over the pixels
         intense_cut = cls.get_data_cut(reg, data)
 
 
         if (MathUtils.are_all_nan(intense_cut) or MathUtils.are_all_zeroes(intense_cut) or
-            MathUtils.is_infinite(noise)):
+            MathUtils.is_infinite(global_noise)):
             # skip all the nonsence if all the data is Nan
             logging.debug(f"Skipping region:{reg.meta['label']} {fname} because NaN/Zeroes/inf ")
             # im_data["flux_jybm"] = im_data["flux_jy"] = None
-            im_data["flux_jybm"] = im_data["noise"] = None
+            im_data["flux_jybm"] = im_data["noise"] = im_data["image_noise"] = None
             return im_data
 
-        # flux per beam sum
-        # flux_jybm = np.nansum(cls.get_data_cut(reg, data))
-        
-        # flux_jybm = np.nanmean(intense_cut)
-        # cpixx, cpixy = np.array(intense_cut.shape)//2
         cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
         flux_jybm = intense_cut[cpixx, cpixy]
 
-        if (flux_jybm > sig_factor * noise):
-        # if flux_jybm > noise:
+        if (np.abs(flux_jybm) > sig_factor * global_noise):
             im_data["flux_jybm"] = flux_jybm
         else:
             im_data["flux_jybm"] = None
     
-        im_data["noise"] = noise
+        im_data["noise"] = global_noise
+        im_data["image_noise"] = image_noise
         return im_data
 
     @staticmethod
@@ -610,22 +678,24 @@ class FitsManip:
         return data_cut
 
     @classmethod
-    def get_image_stats2(cls, file_core, images, regs, noise_reg, sig_factor):
+    def get_image_stats2(cls, file_core, images, regs, global_noise, noise_reg, sig_factor):
         fluxes, waves = [], []
         logging.info("starting get_image_stats")
         for reg in regs:
             logging.info(f"Region: {reg.meta['label']}")
             with futures.ProcessPoolExecutor(max_workers=16) as executor:
                 results = executor.map(
-                    partial(cls.extract_stats2, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor), images
+                    partial(cls.extract_stats2, reg=reg, global_noise=global_noise,
+                    noise_reg=noise_reg, sig_factor=sig_factor), images
                     )
             
             # # some testbed
             # results = []
             # for im in images:
-            #     results.append(cls.extract_stats2(im, reg=reg, noise_reg=noise_reg, sig_factor=sig_factor))
+            #     results.append(cls.extract_stats2(im, reg=reg, global_noise=global_noise, 
+            # noise_reg=noise_reg, sig_factor=sig_factor))
 
-            outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": []}
+            outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": [], "image_noise": []}
                         for _ in "IQU"}
 
             for res in results:
@@ -633,6 +703,7 @@ class FitsManip:
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
                 outs[res["stokes"]]["noise"].append(res["noise"])
+                outs[res["stokes"]]["image_noise"].append(res["image_noise"])
             
             checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
         
@@ -640,9 +711,9 @@ class FitsManip:
                 # contains I, Q, U, noise, freqs, fpol, lpol
                 fout = {k: np.asarray(v["flux_jybm"], dtype=np.float) for k,v in outs.items()}
                 fout.update({v: outs["I"][v] for v in ["noise", "freqs"]})
+                fout.update({f"{v}_err": outs[v]["image_noise"] for v in "IQU"})
                 
-                fout["lpol"] = MathUtils.linear_polzn(fout["Q"], fout["U"],
-                        noise=noise_reg, thresh=sig_factor)
+                fout["lpol"] = MathUtils.linear_polzn(fout["Q"], fout["U"])
 
                 fout["fpol"] = MathUtils.fractional_polzn(fout["I"], fout["Q"],
                     fout["U"], noise=noise_reg, thresh=sig_factor)
@@ -689,7 +760,7 @@ def parser():
     parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
         help="Testing prefix. Will be Prepended with '-'", default=None)
 
-    parsing.add_argument("--threshold", dest="thresh", metavar="", type=int,
+    parsing.add_argument("--threshold", dest="thresh", metavar="", type=float,
         default=10,
         help="Noise factor threshold above which to extract. This will be threshold * noise_sigma")
     parsing.add_argument("--noise", dest="noise", metavar="", type=float,
@@ -759,32 +830,35 @@ if __name__ == "__main__":
         for factor in opts.reg_size:
             start = perf_counter()
             file_core = f"regions-mpc-{factor}{testing}"
+            images = IOUtils.read_sorted_filnames(opts.in_list)
             
             if opts.reg_file:
                 reg_file = opts.reg_file
                 logging.info(f"Using {reg_file} as region file")
             else:
+                # factor here is the size of radius of box or circle
                 reg_file = IOUtils.generate_regions(f"regions/beacons", factor=factor)
+                # because not user specified, I can edit however I want
+                IOUtils.write_valid_regions(reg_file, images[0], threshold=20)
             
             regs = regions.Regions.read(reg_file, format="ds9")
             
-            images = IOUtils.read_sorted_filnames(opts.in_list)
             logging.info(f"Working on Stokes IQU")
             logging.info(f"With {len(regs)} regions")
             logging.info(f"And {len(images)} images ({len(images)//3} X IQU)")
 
             if opts.noise:
-                noise_reg = opts.noise
+                global_noise = opts.noise
             else:
                 noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
                 logging.info(f"Getting noise from {images[0]}")
-                noise_reg = FitsManip.get_noise(noise_reg, images[0], data=None)
+                global_noise = FitsManip.get_noise(noise_reg, images[0], data=None)
             
-            logging.info(f"Noise is       : {noise_reg}")
+            logging.info(f"Noise is       : {global_noise}")
             logging.info(f"Sigma threshold: {opts.thresh}")
-            logging.info(f"Noise threshold: {opts.thresh * noise_reg}")
+            logging.info(f"Noise threshold: {opts.thresh * global_noise}")
             
-            bn = FitsManip.get_image_stats2(file_core, images, regs, noise_reg, sig_factor=opts.thresh)
+            bn = FitsManip.get_image_stats2(file_core, images, regs, global_noise, noise_reg, sig_factor=opts.thresh)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
