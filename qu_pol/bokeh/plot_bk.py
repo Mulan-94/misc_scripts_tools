@@ -2,6 +2,7 @@ import os
 import json
 import yaml
 import numpy as np
+from argparse import ArgumentParser
 
 from glob import glob
 from bokeh.io import save, output_file
@@ -223,51 +224,65 @@ def write_data(model, name, o_file):
         save(model, filename=o_path)
 
 
+def arg_parser():
+    parser = ArgumentParser(
+        usage="""
+\nExample
+\n
+\npython plot_bk.py -id IQU-regions-mpc-20-circle-sel-0.05 IQU-regions-mpc-20-correct-0.05
+\n\r=================+++++++++++++++++++++++===========
+""")
+    parser.add_argument("-id", type=str, nargs="+", dest="i_dirs",
+        help="Input directories")
+    return parser
 if __name__ == "__main__":
 
+    opts = arg_parser().parse_args()
 
     yaml_plots = read_yaml("plots.yml")
 
-    # for each LOS, read its data and plot it
-    for los in glob("IQU-regions-mpc-20-correct-sel-0.05/*npz"):
-        reg = os.path.splitext(os.path.basename(los))[0]
-        depth_dir = os.path.dirname(los) + "-depths"
+    for i_dir in opts.i_dirs:
+        # for each LOS, read its data and plot it
+        for los in glob(f"{i_dir}/*npz"):
+            reg = os.path.splitext(os.path.basename(los))[0]
+            depth_dir = os.path.dirname(los) + "-depths"
 
-        # read line of sight data wavelengths
-        los_data = read_data(los)
+            # read line of sight data wavelengths
+            los_data = read_data(los)
 
-        gets ={g.lower(): los_data[g] for g in 
-            ['I', 'Q', 'U', 'I_err', 'Q_err', 'U_err', 'freqs', "lpol"]}
+            gets ={g.lower(): los_data[g] for g in 
+                ['I', 'Q', 'U', 'I_err', 'Q_err', 'U_err', 'freqs', "lpol"]}
 
-        grps = {"grp1": [], "grp2": []}
-        pol_data = Pol(**gets).generate_data()
-        
-        # read los data for depths
-        try:
-            pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
-        except FileNotFoundError:
-            print(f"Depth File for {reg} not found")
-            continue
+            grps = {"grp1": [], "grp2": []}
+            pol_data = Pol(**gets).generate_data()
+            
+            # read los data for depths
+            try:
+                pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
+            except FileNotFoundError:
+                print(f"Depth File for {reg} not found")
+                continue
 
-        for plot, plot_params in yaml_plots.items():
+            for plot, plot_params in yaml_plots.items():
 
-            sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
-            if plot in ["fpol", "angle", "stokes", "lpol"]:
-                grps["grp1"].append(sub)
-            else:
-                grps["grp2"].append(sub)
+                sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
+                if plot in ["fpol", "angle", "stokes", "lpol"]:
+                    grps["grp1"].append(sub)
+                else:
+                    grps["grp2"].append(sub)
 
-        outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
-                        ncols=1,
-                        sizing_mode="stretch_both", toolbar_location="left")
-        
-        #change to .json if you want a json output
-        if not os.path.isdir("plots"):
-            os.mkdir("plots")
-        o_file =os.path.join("plots", reg + ".html")
-        print(f"Writing {o_file}")
+            outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
+                            ncols=1,
+                            sizing_mode="stretch_both", toolbar_location="left")
+            
+            #change to .json if you want a json output
+            o_dir = i_dir + "-plots"
+            if not os.path.isdir(o_dir):
+                os.mkdir(o_dir)
+            o_file =os.path.join(o_dir, reg + ".html")
+            print(f"Writing {o_file}")
 
-        write_data(model=outp, name=reg, o_file=o_file)
-        print("Done")
-        # set_trace()
+            write_data(model=outp, name=reg, o_file=o_file)
+            print("Done")
+            # set_trace()
     
