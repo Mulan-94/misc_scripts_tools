@@ -8,8 +8,9 @@ from glob import glob
 from bokeh.io import save, output_file
 from bokeh.embed import json_item, components
 from bokeh.layouts import row, gridplot, layout, column
-from bokeh.models import (ColumnDataSource, Whisker, Line, Circle, Range1d, LinearAxis, DataRange1d,
-                          Panel, Tabs, Legend, LegendItem)
+from bokeh.models import (ColumnDataSource, Whisker, Line, Circle, Range1d,
+        LinearAxis, DataRange1d, Panel, Tabs, Legend, LegendItem,
+        HoverTool)
 from bokeh.plotting import figure
 from ipdb import set_trace
 
@@ -160,12 +161,10 @@ def make_plot(indata, meta_title, meta_data):
     mapping = {_: "lpol" for _ in ["lpol", "angle", "stokes"]}
     mapping.update({_: _ for _ in ["fdirty", "fclean", "rmsf"]})
     mapping["fpol"] = "fpol"
-
-    tooltips = [(f"{meta_data['x']}, y", f"(@{meta_data['x']}, $y")]
     
     fig = figure(
         plot_width=800, plot_height=500, sizing_mode="stretch_both",
-        tooltips=tooltips
+        # tooltips=[]
         )
 
     fig.axis.axis_label_text_font = "monospace"
@@ -176,10 +175,25 @@ def make_plot(indata, meta_title, meta_data):
 
     legend_items = []
     for yaxis, params in meta_data["items"].items():
-        ydata = indata[mapping[meta_title]].copy()
+
+        # there's a shared x for all plots, but each plot can define its x
+        # give precedence to x axis in individual plots rather than the general one
+        xaxis = params["x"] if "x" in params else meta_data["x"]
+
+        # if xdata is specified, it implies that it needs to be processed
+        if "xdata" in params:
+            xdata = indata[params["xdata"]].copy()
+        else:
+            xdata = indata[meta_data["x"]]
+
+        if "ydata" in params:
+            ydata = indata[params["ydata"]].copy()
+        else:
+            ydata = indata[mapping[meta_title]].copy()
+        
         data_src = {
-            meta_data["x"]: indata[meta_data["x"]],
-            yaxis: getattr(Pol, yaxis)(ydata)
+            xaxis: getattr(Pol, xaxis)(xdata) if hasattr(Pol, xaxis) else xdata,
+            yaxis: getattr(Pol, yaxis)(ydata) if hasattr(Pol, yaxis) else ydata
             }
 
         cds = ColumnDataSource(data=data_src)
@@ -191,23 +205,35 @@ def make_plot(indata, meta_title, meta_data):
             specs = dict(line_width=3)
 
         glyph = glyphs.get(meta_data["glyph"])(
-            x=meta_data["x"], y=yaxis,
+            x=xaxis, y=yaxis,
             line_color=globals()[params["color"]], 
             **specs
             )
-        rend = fig.add_glyph(cds, glyph)
+        rend = fig.add_glyph(cds, glyph, visible=params["visible"])
 
         if "y_error" in params:
-            ebars = error_margins(data_src[meta_data["x"]], data_src[yaxis], indata[params["y_error"]])
-            ebars.name="ebar"
+            ebars = error_margins(data_src[xaxis], data_src[yaxis], indata[params["y_error"]])
+            ebars.name="ebar_y"
+            ebars.js_link("visible", rend, "visible")
+            rend.js_link("visible", ebars, "visible")
+            fig.add_layout(ebars)
+
+        if "x_error" in params:
+            ebars = error_margins(data_src[yaxis], data_src[xaxis], indata[params["x_error"]])
+            ebars.name="ebar_x"
             ebars.js_link("visible", rend, "visible")
             rend.js_link("visible", ebars, "visible")
             fig.add_layout(ebars)
 
         legend_items.append((params["label"], [rend]))
     
+    tooltips = HoverTool(tooltips=[
+        (f"{xaxis}, {yaxis}", f"(@{xaxis}, $y")])
+    fig.add_tools(tooltips)
+    
     fig.add_layout(Legend(
         items=legend_items, click_policy="hide", label_text_font_size="15px"))
+    fig.y_range.only_visible = True
     return fig
 
 
@@ -234,55 +260,59 @@ def arg_parser():
 """)
     parser.add_argument("-id", type=str, nargs="+", dest="i_dirs",
         help="Input directories")
+    parser.add_argument("--yaml", type=str, nargs="+", dest="yamls",
+        default=["plots.yml"],
+        help="Yaml file containing the plots to be plotted.")
     return parser
 if __name__ == "__main__":
 
     opts = arg_parser().parse_args()
 
-    yaml_plots = read_yaml("plots.yml")
 
-    for i_dir in opts.i_dirs:
-        # for each LOS, read its data and plot it
-        for los in glob(f"{i_dir}/*npz"):
-            reg = os.path.splitext(os.path.basename(los))[0]
-            depth_dir = os.path.dirname(los) + "-depths"
+    for y_file in opts.yamls:
+        yaml_plots = read_yaml(y_file)
 
-            # read line of sight data wavelengths
-            los_data = read_data(los)
+        for i_dir in opts.i_dirs:
+            # for each LOS, read its data and plot it
+            for los in glob(f"{i_dir}/*npz"):
+                reg = os.path.splitext(os.path.basename(los))[0]
+                depth_dir = os.path.dirname(los) + "-depths"
 
-            gets ={g.lower(): los_data[g] for g in 
-                ['I', 'Q', 'U', 'I_err', 'Q_err', 'U_err', 'freqs', "lpol"]}
+                # read line of sight data wavelengths
+                los_data = read_data(los)
 
-            grps = {"grp1": [], "grp2": []}
-            pol_data = Pol(**gets).generate_data()
-            
-            # read los data for depths
-            try:
-                pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
-            except FileNotFoundError:
-                print(f"Depth File for {reg} not found")
-                continue
+                gets ={g.lower(): los_data[g] for g in 
+                    ['I', 'Q', 'U', 'I_err', 'Q_err', 'U_err', 'freqs', "lpol"]}
 
-            for plot, plot_params in yaml_plots.items():
+                grps = {"grp1": [], "grp2": []}
+                pol_data = Pol(**gets).generate_data()
+                
+                # read los data for depths
+                try:
+                    pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
+                except FileNotFoundError:
+                    print(f"Depth File for {reg} not found")
+                    continue
 
-                sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
-                if plot in ["fpol", "angle", "stokes", "lpol"]:
-                    grps["grp1"].append(sub)
-                else:
-                    grps["grp2"].append(sub)
+                for plot, plot_params in yaml_plots.items():
 
-            outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
-                            ncols=1,
-                            sizing_mode="stretch_both", toolbar_location="left")
-            
-            #change to .json if you want a json output
-            o_dir = i_dir + "-plots"
-            if not os.path.isdir(o_dir):
-                os.mkdir(o_dir)
-            o_file =os.path.join(o_dir, reg + ".html")
-            print(f"Writing {o_file}")
+                    sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
+                    if plot in ["fpol", "angle", "stokes", "lpol"]:
+                        grps["grp1"].append(sub)
+                    else:
+                        grps["grp2"].append(sub)
 
-            write_data(model=outp, name=reg, o_file=o_file)
-            print("Done")
-            # set_trace()
-    
+                outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
+                                ncols=len(grps) if grps["grp2"] else 1,
+                                sizing_mode="stretch_both", toolbar_location="left")
+                
+                #change to .json if you want a json output
+                o_dir = i_dir + "-plots"
+                if not os.path.isdir(o_dir):
+                    os.mkdir(o_dir)
+                o_file =os.path.join(o_dir, reg + ".html")
+                print(f"Writing {o_file}")
+
+                write_data(model=outp, name=reg, o_file=o_file)
+                print("Done")
+        
