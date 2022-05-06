@@ -1,0 +1,12 @@
+# python scrap.py -rs 20 -t circle-sel-0.05 -f clean-small.txt --threshold 0.05 -rf regions/selected.reg
+# python rm_synthesis.py -id IQU-regions-mpc-20-circle-sel-0.05 -od test_plot -md 1200
+
+# python scrap.py -rs 20 -t correct-sel-0.05 -f clean-small.txt --threshold 0.05 -rf regions/beacons-20-chosen.reg 
+# python rm_synthesis.py -id IQU-regions-mpc-20-correct-sel-0.05 -od test_plot -md 1200
+
+
+
+
+python scrap.py -rs 3 5 -t circles -f clean-small.txt --threshold 0.05 -rt 10 --noverwrite
+
+python rm_synthesis.py -id IQU-regions-mpc-*-circles -md 1200

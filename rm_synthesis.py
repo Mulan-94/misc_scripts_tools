@@ -322,11 +322,12 @@ def get_rmsf_fwhm(start_band, bandwidth, lambdas=None):
 
 def arg_parser():
     parse = argparse.ArgumentParser()
-    parse.add_argument("-id", "--input-dir", dest="data_dir", type=str,
+    parse.add_argument("-id", "--input-dir", dest="data_dirs", type=str,
+        nargs="+",
         help="Directory containing the various data files")
     parse.add_argument("-od", "--output-dir", dest="output_dir", type=str,
         default="plots_rmsynth",
-        help="Where to dump the ouptut and plots")
+        help="Where to dump the output plots if available")
 
     parse.add_argument("-md", "--max-fdepth", dest="max_fdepth", type=int,
         default=500,
@@ -340,76 +341,77 @@ def arg_parser():
 if __name__ == "__main__":
     opts = arg_parser().parse_args()
 
-    if not os.path.isdir(opts.output_dir):
-        os.makedirs(opts.output_dir)
+    for _i, data_dir in enumerate(opts.data_dirs):
 
-    output_dir = opts.output_dir
+        if not os.path.isdir(opts.output_dir):
+            os.makedirs(f"{opts.output_dir}-{_i}")
 
-    # get the various lines of sight
-    data_files =  sorted(glob(f"{opts.data_dir}/*.npz"))
+        output_dir = f"{opts.output_dir}-{_i}"
+
+        # get the various lines of sight
+        data_files =  sorted(glob(f"{data_dir}/*.npz"))
+
+        for data_file in data_files:
+            reg_num = os.path.splitext(os.path.basename(data_file))[0].split("_")[-1]
+
+            print(f"Dealing with {data_file}")
+            datas = read_npz(data_file)
+            freq, stokes_q, stokes_u, stokes_i = (
+                datas["freqs"], datas["Q"], datas["U"], datas["I"])
+
+            linear_pol = stokes_q + 1j *stokes_u
+
+            light_speed = 3e8
+            lam2 = (light_speed/freq)**2
+
+            ind_nan = ~np.isnan(np.absolute(linear_pol))
+            linear_pol = linear_pol[ind_nan]
+            lam2 = lam2[ind_nan]
+
+            if linear_pol.size==0:
+                print(f"Skipping region {reg_num}")
+                continue
 
 
-    for data_file in data_files:
-        reg_num = os.path.splitext(os.path.basename(data_file))[0].split("_")[-1]
+            rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
+                phi_step=opts.depth_step, clean=True)
+            
+            del rm_products["fcomp"]
+            out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + "-depths")
+            outfile = os.path.join(out_dir, f"reg_{reg_num}.npz")
+            print(f"Saving to: {outfile}")
+            np.savez(outfile, **rm_products)
 
-        print(f"Dealing with {data_file}")
-        datas = read_npz(data_file)
-        freq, stokes_q, stokes_u, stokes_i = (
-            datas["freqs"], datas["Q"], datas["U"], datas["I"])
+            # #plotting everything
+            # plt.close("all")
+            # fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
 
-        linear_pol = stokes_q + 1j *stokes_u
+            # ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
+            # #ax[0].plot(lam2, linear_pol.real, 'b.', label='Q')
+            # #ax[0].plot(lam2, linear_pol.imag, 'r.', label='U')
+            # ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+            # ax[0].set_ylabel('Polarisation Intensity [Jy beam$^{-1}$')
+            # ax[0].legend(loc='best')
 
-        light_speed = 3e8
-        lam2 = (light_speed/freq)**2
+            # ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
+            # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].real, 'b', label='real')
+            # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].imag, 'r', label='imag')
 
-        ind_nan = ~np.isnan(np.absolute(linear_pol))
-        linear_pol = linear_pol[ind_nan]
-        lam2 = lam2[ind_nan]
+            # if "fclean" in rm_products:
+            #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
 
-        if linear_pol.size==0:
-            print(f"Skipping region {reg_num}")
-            continue
+            # # if "fcomp" in rm_products:
+            # #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fcomp']), 'orangered', label='Clean Amp')
 
+            
 
-        rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
-            phi_step=opts.depth_step, clean=True)
-        
-        del rm_products["fcomp"]
-        out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + "-depths")
-        outfile = os.path.join(out_dir, f"reg_{reg_num}.npz")
-        print(f"Saving to: {outfile}")
-        np.savez(outfile, **rm_products)
+            # ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
+            # ax[1].set_ylabel('Polarisation Intensity')
+            # ax[1].legend(loc='best')
 
-        # #plotting everything
-        # plt.close("all")
-        # fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
-
-        # ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
-        # #ax[0].plot(lam2, linear_pol.real, 'b.', label='Q')
-        # #ax[0].plot(lam2, linear_pol.imag, 'r.', label='U')
-        # ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-        # ax[0].set_ylabel('Polarisation Intensity [Jy beam$^{-1}$')
-        # ax[0].legend(loc='best')
-
-        # ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
-        # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].real, 'b', label='real')
-        # #ax[1].plot(rm_products['depths'], rm_products['fdirty'].imag, 'r', label='imag')
-
-        # if "fclean" in rm_products:
-        #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
-
-        # # if "fcomp" in rm_products:
-        # #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fcomp']), 'orangered', label='Clean Amp')
-
-        
-
-        # ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
-        # ax[1].set_ylabel('Polarisation Intensity')
-        # ax[1].legend(loc='best')
-
-        # fig.tight_layout()
-        # oname = os.path.join(output_dir, f"reg_{reg_num}.png")
-        # fig.savefig(oname)
+            # fig.tight_layout()
+            # oname = os.path.join(output_dir, f"reg_{reg_num}.png")
+            # fig.savefig(oname)
 
 
 
