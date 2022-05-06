@@ -98,33 +98,43 @@ class IOUtils:
             return False
 
     @classmethod
-    def write_valid_regions(cls, regfile, fname, threshold=20):
+    def write_valid_regions(cls, regfile, fname, threshold=20, overwrite=True):
 
-        # read whatever was written out to begin with
-        logging.info("Determining valid regions")
-        with open(regfile, "r") as fil:
-            lines = fil.readlines()
+        if overwrite:
+            # read whatever was written out to begin with
+            logging.info("Determining valid regions")
+            with open(regfile, "r") as fil:
+                lines = fil.readlines()
 
-        regs = regions.Regions.read(regfile, format="ds9")
-        noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
+            regs = regions.Regions.read(regfile, format="ds9")
+            noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
 
-        #identify what is thought to be valid
-        chosen = []
-        for _, reg in enumerate(regs):
-            vals = cls.choose_valid_regs(fname, reg, noise_reg, threshold=threshold)
-            if vals:
-                chosen.append(_)
-        
-        logging.info(f"{len(chosen)} / {len(regs)} regions found to be valid")
-        logging.info(f"Overwriting into {regfile}")
-        #write back to the same file the valid regions
-        with open(regfile, "w") as fil:
-            nlines = lines[:3] + [lines[c+3] for c in chosen]
-            fil.writelines(nlines)
+            #identify what is thought to be valid
+            chosen = []
+            for _, reg in enumerate(regs):
+                vals = cls.choose_valid_regs(fname, reg, noise_reg, threshold=threshold)
+                if vals:
+                    chosen.append(_)
+            
+            logging.info(f"{len(chosen)} / {len(regs)} regions found to be valid")
+            logging.info(f"Overwriting into {regfile}")
+            
+            #write back to the same file the valid regions
+            with open(regfile, "w") as fil:
+                nlines = []
+                for i, c in enumerate(chosen):
+                    if "los" not in lines[c+3]:
+                        new = lines[c+3].replace("\n", f" # {i},los text={{reg_{i}}}\n")
+                        nlines.append(new)
+                    else:
+                        nlines.append(lines[c+3])
+                nlines = lines[:3] + nlines
+                fil.writelines(nlines)
 
     @staticmethod
-    def generate_regions(reg_fname, factor=50, max_w=572, max_h=572):
+    def generate_regions(reg_fname, factor=50, max_w=572, max_h=572, overwrite=True):
         """
+        Ref: https://ds9.si.edu/doc/ref/region.html
         Create a DS9 region file containing a bunch of regions
         factor: int
             In my case, the size of the region ie length / widh t
@@ -164,24 +174,24 @@ class IOUtils:
         if min(widths) < min(width_range):
             widths.append(min(width_range))
 
-        for height in range(*height_range, factor):
-            for width in range(*width_range, factor):
+        for height in range(*height_range, factor*2):
+            for width in range(*width_range, factor*2):
                 # pts.append("circle({}, {}, {}) # color=#2EE6D6 width=2".format(width, height+factor, factor/2))
                 width = max_h if width > max_w else width
                 height = max_h if height > max_h else height
-                pts.append(
-                    "box({}, {}, {}, {}) # color=#2EE6D6 width=2 text={{reg_{}}}".format(
-                        width, height, factor, factor, count))
+                # pts.append(
+                #     "box({}, {}, {}, {}) # text={{reg_{}}}".format(
+                #         width, height, factor, factor, count))
+                pts.append("circle({}, {}, {})".format(width, height, factor))
                 count += 1
 
         if ".reg" not in reg_fname:
             reg_fname += f"-{factor}.reg"
 
-        if not os.path.isfile(reg_fname):
+        if not os.path.isfile(reg_fname) or overwrite:
             with open(reg_fname, "w") as fil:
                 pts = [p+"\n" for p in header+pts]
                 fil.writelines(pts)
-
             logging.info(f"Regions file written to: {reg_fname}")
         else:
             logging.info(f"File already available at: {reg_fname}")
@@ -695,6 +705,7 @@ class FitsManip:
             #     results.append(cls.extract_stats2(im, reg=reg, global_noise=global_noise, 
             # noise_reg=noise_reg, sig_factor=sig_factor))
 
+            
             outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": [], "image_noise": []}
                         for _ in "IQU"}
 
@@ -706,7 +717,7 @@ class FitsManip:
                 outs[res["stokes"]]["image_noise"].append(res["image_noise"])
             
             checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
-        
+
             if not all(_ is None for _ in checks):
                 # contains I, Q, U, noise, freqs, fpol, lpol
                 fout = {k: np.asarray(v["flux_jybm"], dtype=np.float) for k,v in outs.items()}
@@ -721,7 +732,7 @@ class FitsManip:
                 out_dir = IOUtils.make_out_dir(f"IQU-{file_core}")
                 outfile = os.path.join(out_dir, f"{reg.meta['label']}")
                 np.savez(outfile, **fout)
-
+            
         logging.info(f"Done saving data files")
         logging.info( "--------------------")
         return
@@ -748,7 +759,7 @@ def parser():
     )
     parsing = argparse.ArgumentParser()
     parsing.add_argument("-f", "--infile", dest="in_list", type=str,
-        default="post.txt", metavar="",
+        metavar="", required=True,
         help="File containing an organised list of the input image names."+
         "Can easily be done with 'ls *-image.fits > whatever.txt'")
     parsing.add_argument("-rf", "--region-file", dest="reg_file", type=str,
@@ -757,6 +768,13 @@ def parser():
     parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
         type=int, default=[], metavar="", 
         help="Create regions of this pixel size and perform analyses on them")
+    parsing.add_argument("-rt", "--regions-threshold", dest="r_thresh",
+        metavar="", type=int, default=10,
+        help="Threshold for regions in which to make masks. Default is 5")
+    parsing.add_argument("-ro", "--regions-only", dest="r_only",
+        action="store_true", help="Generate only region files")
+
+
     parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
         help="Testing prefix. Will be Prepended with '-'", default=None)
 
@@ -766,6 +784,9 @@ def parser():
     parsing.add_argument("--noise", dest="noise", metavar="", type=float,
         default=None,
         help="Noise value above which to extract. Default is automatic determine.")
+    parsing.add_argument("--noverwrite", dest="noverwrite", action="store_false",
+        help="Do not ovewrite everything along the way")
+
     
     #plotting arguments
     parsing.add_argument("--plot-grid", dest="plot_grid", action="store_true",
@@ -837,9 +858,15 @@ if __name__ == "__main__":
                 logging.info(f"Using {reg_file} as region file")
             else:
                 # factor here is the size of radius of box or circle
-                reg_file = IOUtils.generate_regions(f"regions/beacons", factor=factor)
+                reg_file = IOUtils.generate_regions(f"regions/beacons-t{opts.r_thresh}", 
+                    factor=factor, overwrite=opts.noverwrite)
                 # because not user specified, I can edit however I want
-                IOUtils.write_valid_regions(reg_file, images[0], threshold=20)
+                IOUtils.write_valid_regions(reg_file, images[0],
+                    threshold=opts.r_thresh, overwrite=opts.noverwrite)
+
+            # generate region files only so end the loop. On to the next one
+            if opts.r_only:
+                continue
             
             regs = regions.Regions.read(reg_file, format="ds9")
             
