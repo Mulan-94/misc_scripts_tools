@@ -10,3 +10,5 @@
 python scrap.py -rs 3 5 -t circles -f clean-small.txt --threshold 0.05 -rt 10 --noverwrite
 
 python rm_synthesis.py -id IQU-regions-mpc-*-circles -md 1200
+
+python plot_bk.py -id IQU-regions-mpc-*-circles --yaml plots.yml 

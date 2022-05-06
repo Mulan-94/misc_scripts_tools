@@ -67,7 +67,7 @@ class Pol():
         return res
 
     @staticmethod
-    def lambda_sq(freqs):
+    def lambda_squared(freqs):
         c = 3e8
         return (c/freqs)**2
     
@@ -100,7 +100,7 @@ class Pol():
         datas["lpol"] = self.lpol
         datas["angle"] = Pol.polarisation_angle(self.q, self.u)
         datas["stokes"] = self.q + 1j*self.u
-        datas["lambda_sq"] = Pol.lambda_sq(self.freqs)
+        datas["lambda_sq"] = Pol.lambda_squared(self.freqs)
         
         datas["angle_err"] = Pol.polarisation_angle_error(
                 datas["power"], self.q, self.u, self.q_err, self.u_err)
@@ -179,7 +179,6 @@ def make_plot(indata, meta_title, meta_data):
         # there's a shared x for all plots, but each plot can define its x
         # give precedence to x axis in individual plots rather than the general one
         xaxis = params["x"] if "x" in params else meta_data["x"]
-
         # if xdata is specified, it implies that it needs to be processed
         if "xdata" in params:
             xdata = indata[params["xdata"]].copy()
@@ -310,7 +309,7 @@ if __name__ == "__main__":
                 o_dir = i_dir + "-plots"
                 if not os.path.isdir(o_dir):
                     os.mkdir(o_dir)
-                o_file =os.path.join(o_dir, reg + ".html")
+                o_file =os.path.join(o_dir, reg.replace("_", "") + ".html")
                 print(f"Writing {o_file}")
 
                 write_data(model=outp, name=reg, o_file=o_file)

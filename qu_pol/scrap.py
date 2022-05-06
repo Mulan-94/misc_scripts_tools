@@ -122,7 +122,7 @@ class IOUtils:
             #write back to the same file the valid regions
             with open(regfile, "w") as fil:
                 nlines = []
-                for i, c in enumerate(chosen):
+                for i, c in enumerate(chosen, 1):
                     if "los" not in lines[c+3]:
                         new = lines[c+3].replace("\n", f" # {i},los text={{reg_{i}}}\n")
                         nlines.append(new)
