@@ -101,7 +101,7 @@ class IOUtils:
     def write_valid_regions(cls, regfile, fname, threshold=20, overwrite=True):
 
         if overwrite:
-            # read whatever was written out to begin with
+            # read whatever was written out to begin witfromh
             logging.info("Determining valid regions")
             with open(regfile, "r") as fil:
                 lines = fil.readlines()

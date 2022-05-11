@@ -2,3 +2,6 @@
 *.fits
 *.FITS
 model_images
+
+
+*__pycache__*
