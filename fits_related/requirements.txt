@@ -3,3 +3,4 @@ dask
 astropy
 python-casacore
 ipdb
+matplotlib

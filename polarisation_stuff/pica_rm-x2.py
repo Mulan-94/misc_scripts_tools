@@ -209,6 +209,8 @@ def arg_parser():
 def main():
     args = arg_parser()
 
+    # making these global because of multiprocess non-sharing.
+    # Global variables can not be modified and shared between different processes
     global pdata, fp_data
     
     try:
