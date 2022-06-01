@@ -32,52 +32,91 @@ def read_image_cube(imname, mask=False):
         data =  ~np.asarray(data, dtype=bool)
     return dict(hdr=hdr, data=data, wcs=wcs)
 
-
 def make_mask(imname, xy_dims=None):
     """
-    Simple function to make a mask. Set all NaNs to 0 and pixels with values to 1
- 
-   imname: str
+    Simple function to make a mask. Set all NaNs to 0 and pixels with values to 1  
+    imname: str
         Name of the input image
-
      xy_dims: tuple
         A tuple containing the new data sizes that the input dat should be resized to
         This is with the intent to make an image bigger that it already is by padding
         it. They should be in the order x,y.
         Better make it an even number and hopefully the input image is of an even number
-
-    Returns
-    -------
-    Will automatically be inputimage name + ".mask.fits"
-    xy_dims: tuple
-        A tuple containing the new data sizes that the input dat should be resized to
-        This is with the intent to make an image bigger that it already is by padding
-        it. They should be in the order x,y.
-        Better make it an even number and hopefully the input image is of an even number
     """
+
+    def compute_in_out_slice(N, N0, R, R0):
+        """
+        Gotten from https://github.com/ratt-ru/owlcat/blob/2be3c537073ba6ff86df474e204465c8a405cb19/Owlcat/FitsTool.py#L460-L478
+        
+        given an input axis of size N, and an output axis of size N0, 
+        and reference pixels of I and I0 respectively, computes two slice
+        objects such that
+                A0[slice_out] = A1[slice_in]
+        would do the correct assignment (with I mapping to I0, and the 
+        overlapping regions transferred)
+
+        N  : size of x-axis of input image
+        N0 : size of x-axis of output image
+        R  : Half of length of x-axis of input image
+        R0  : Half of length of x-axis of output image
+        
+        For example
+        N  : 169
+        N0 : 572
+        R  : 169//2 = 84
+        R0 : 572//2 = 286
+        """
+        i, j = 0, N     # input slice
+        i0 = R0 - R
+        j0 = i0 + N     # output slice
+
+        if i0 < 0:
+            i = -i0
+            i0 = 0
+        if j0 > N0:
+            j = N - (j0 - N0)
+            j0 = N0
+        if i >= j or i0 >= j0:
+            return None, None
+        return slice(i0, j0), slice(i, j)
+
+
     with fits.open(imname) as hdul:
         hdu = hdul[0]
+        # delete header history
+        del hdu.header["HISTORY"]
+        
         data = hdu.data
         data[np.where(~np.isnan(data))] = 1
         data[np.where(np.isnan(data))] = 0
         data = data.astype("int8")
+
         if xy_dims is not None:
             xy_dims = tuple(xy_dims)
-            x_pad, y_pad = (np.array(xy_dims) - np.array(data.shape[-2:]))//2
-            data = np.pad(data[0,0], ((x_pad, x_pad), (y_pad, y_pad)))
-            # add extra padding if the shapes are not exact same
-            if not np.all(np.array(xy_dims) == np.array(data.shape)):
-                if data.shape[0] != xy_dims[0]:
-                    x_pad = xy_dims[0] - data.shape[0]
-                else:
-                    x_pad = 0
-                if data.shape[1] != xy_dims[1]:
-                    y_pad = xy_dims[1] - data.shape[1]
-                else:
-                    y_pad = 0
-                data = np.pad(data, ((0,x_pad), (0, y_pad)))
-            data = data.reshape(1,1, *data.shape)
-        hdu.data = data
+
+            nx = data.shape[-1]
+            ny = data.shape[-2]
+            rx, ry = nx//2, ny//2
+            rx0, ry0 = xy_dims[0]//2, xy_dims[1]//2
+            ndata = np.zeros(xy_dims)
+            xout, xin = compute_in_out_slice(nx, xy_dims[0], rx, rx0)
+            yout, yin = compute_in_out_slice(ny, xy_dims[1], ry, ry0)
+
+            ndata[..., yout, xout] = data[..., yin, xin]
+
+            wcs = WCS(hdu.header) #, mode="pyfits")
+            pixcoord = np.zeros((1, hdu.header["NAXIS"]), float)
+            pixcoord[0, 0] = nx//2
+            pixcoord[0, 1] = ny//2
+            world = wcs.wcs_pix2world(pixcoord, 0)  # get WCS of center pixel
+            hdu.header["CRVAL1"] = world[0,0]
+            hdu.header["CRVAL2"] = world[0,1]
+            hdu.header["CRPIX1"] = rx0 + 1
+            hdu.header["CRPIX2"] = ry0 + 1
+
+            hdu.data = ndata
+        else:
+            hdu.data = data
         hdul.writeto(imname+".mask.fits", overwrite=True)
     print(f"Done with {imname}")
 
