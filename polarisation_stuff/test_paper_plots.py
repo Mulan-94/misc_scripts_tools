@@ -249,20 +249,18 @@ def make_masks_from_ricks_data():
 # Main
 ######################################################################################
 
-prefix = [
-'-p0-peak-rm.fits',
-'-PA-pangle-at-peak-rm.fits',
-'-FPOL-at-center-freq.fits',
-'-RM-depth-at-peak-rm.fits'
-]
+prefix = "turbo"
+postfix = {
+    "amp" : f'{prefix}-p0-peak-rm.fits',
+    "angle" : f'{prefix}-PA-pangle-at-peak-rm.fits',
+    "fpol" : f'{prefix}-FPOL-at-center-freq.fits',
+    "rm" : f'{prefix}-RM-depth-at-peak-rm.fits'
+}
+
+images = [postfix[_] for _ in "amp angle rm".split()]
+
 
 cubes = glob("*-cubes*.fits")
-images = ['turbo-p0-peak-rm.fits',
- 'turbo-PA-pangle-at-peak-rm.fits',
- 'turbo-RM-depth-at-peak-rm.fits',
- ]
-
-
 stokes = {}
 for cube in cubes:
     stoke = cube.split("-")[0].lower()
@@ -279,15 +277,15 @@ pica_mask = "true_mask_572.fits"
 
 pica_i_data = rfu.get_masked_data(pica_i_image, pica_mask)
 
-pangle_image = "turbo-PA-pangle-at-peak-rm.fits"
+pangle_image = postfix["angle"]
 pangle_data = rfu.read_image_cube(pangle_image)["data"]
 
-fpol_image = 'turbo-FPOL-at-center-freq.fits'
+fpol_image = postfix["fpol"]
 
 
 # plot lobes and their dispersion
 plot_rm_for_lobes(
-    rot_meas_image="turbo-RM-depth-at-peak-rm.fits",
+    rot_meas_image=postfix["rm"],
     e_mask="masks/east-lobe-572.fits", w_mask="masks/west-lobe-572.fits",
     vmin=-100, vmax=100)
 
