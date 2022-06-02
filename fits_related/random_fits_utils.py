@@ -3,7 +3,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
-
+from ipdb import set_trace
 
 
 def read_image_cube(imname, mask=False):
@@ -84,9 +84,14 @@ def make_mask(imname, xy_dims=None):
     with fits.open(imname) as hdul:
         hdu = hdul[0]
         # delete header history
-        del hdu.header["HISTORY"]
+        if "HISTORY" in hdu.header:
+            del hdu.header["HISTORY"]
         
         data = hdu.data
+        # change zeroes to Nans
+        data[np.where(data==0)] = np.nan
+
+        # where not nan is valid else not valid
         data[np.where(~np.isnan(data))] = 1
         data[np.where(np.isnan(data))] = 0
         data = data.astype("int8")
@@ -166,3 +171,29 @@ def rotate(inp, theta):
     ads = np.deg2rad(theta)
     res = np.multiply(rotation_matrix(theta), inp)
     return res
+
+
+def extend_fits_axes(name, new_axes=4):
+    """
+    Extenend the number of axes ina fits image
+    See https://stackoverflow.com/questions/55003367/re-order-cards-in-a-fits-header
+    name: str
+        Name of the input image
+    new_axes: int
+        By how much to extend image axes
+    """
+    with fits.open(name) as hdul:
+        print(f"Extending naxis by: {new_axes - hdul[0].data.ndim} dims")
+        new_axes = tuple([None for _ in range(new_axes - hdul[0].data.ndim)])
+        if new_axes:
+            hdul[0].data = hdul[0].data[new_axes]
+            hdul[0].header["NAXIS"] = hdul[0].data.ndim
+            hdul[0].header.insert("NAXIS2", ("NAXIS3", 1), after=True)
+            hdul[0].header.insert("NAXIS3", ("NAXIS4", 1), after=True)
+        try:
+            hdul[0].verify()
+        except VerifyError:
+            print("attempting to Fixing verification errors")
+            hdul[0].verify('fix')
+        hdul.writeto(name, overwrite=True)
+        print("Extension done")

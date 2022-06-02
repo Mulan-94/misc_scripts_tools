@@ -42,7 +42,7 @@ def plot_polarised_intensity(data=None, im_name=None, mask_name=None):
         ax[chan].imshow(lpol, cmap="coolwarm", origin="lower")
     fig.tight_layout()
     fig.savefig("lin_pol.svg")
-    plt.show()
+    # plt.show()
 
 ######################################################################################
 ## Plot fractional polzn for each channel
@@ -75,7 +75,7 @@ def plot_fractional_polzn(data=None, im_name=None, mask_name=None):
     fig.tight_layout()
     #plt.colorbar()
     fig.savefig("fpol.svg")
-    plt.show()
+    # plt.show()
 
 
 ######################################################################################
@@ -133,7 +133,7 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
     vector length: degree of poln (fpol)
     orientation: position angle
     """
-    skip = 8
+    skip = 10
     slicex = slice(None, fpol_data.shape[0], skip)
     slicey = slice(None, fpol_data.shape[-1], skip)
     col, row = np.mgrid[slicex, slicey]
@@ -150,7 +150,7 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
 
     # ax.contourf(row, col, Z)
     # plt.axis([2200, 2770, 2050, 2250])
-    axis.quiver(row, col, u, v, angles="xy", pivot='tail', headlength=4, width=0.0008, scale=10)
+    qv = axis.quiver(row, col, u, v, angles="xy", pivot='tail', headlength=4, width=0.0008, scale=5, headwidth=0)
 
     return axis
 
@@ -164,7 +164,7 @@ def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name):
     ax = add_magnetic_vectors(ax, fpol_data, pa_data)
     fig.tight_layout()
     fig.savefig("intense_mfield.svg")
-    plt.show()
+    # plt.show()
 
 
 
@@ -214,7 +214,7 @@ def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None):
 
     fig.tight_layout()
     fig.savefig("lobes_rm.svg")
-    plt.show()
+    # plt.show()
 
 
 def make_masks_from_ricks_data():
@@ -241,7 +241,7 @@ def make_masks_from_ricks_data():
     ax[1].imshow(pica, origin="lower")
     ax[1].vlines(280, 0, 571)
     ax[1].hlines(280, 0, 571)
-    plt.show()
+    # plt.show()
 
 
 
@@ -249,7 +249,8 @@ def make_masks_from_ricks_data():
 # Main
 ######################################################################################
 
-prefix = "turbo"
+# prefix = "turbo"
+prefix = "from_rick/outputs/with-NHS-data-mask"
 postfix = {
     "amp" : f'{prefix}-p0-peak-rm.fits',
     "angle" : f'{prefix}-PA-pangle-at-peak-rm.fits',
@@ -273,7 +274,7 @@ stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
 
 pica_i_image = "I-MFS.fits"
 # pica_image = "I-hs-MFS.fits"
-pica_mask = "true_mask_572.fits"
+pica_mask = "masks/nhs-mask-572.fits"
 
 pica_i_data = rfu.get_masked_data(pica_i_image, pica_mask)
 
@@ -286,7 +287,7 @@ fpol_image = postfix["fpol"]
 # plot lobes and their dispersion
 plot_rm_for_lobes(
     rot_meas_image=postfix["rm"],
-    e_mask="masks/east-lobe-572.fits", w_mask="masks/west-lobe-572.fits",
+    e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
     vmin=-100, vmax=100)
 
 
