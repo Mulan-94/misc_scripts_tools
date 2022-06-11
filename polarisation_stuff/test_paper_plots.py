@@ -273,8 +273,8 @@ stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
 
 
 pica_i_image = "I-MFS.fits"
-# pica_image = "I-hs-MFS.fits"
-pica_mask = "masks/nhs-mask-572.fits"
+# pica_mask = "masks/nhs-mask-572.fits"
+pica_mask = "from_rick/masks/ricks-data-mask.fits"
 
 pica_i_data = rfu.get_masked_data(pica_i_image, pica_mask)
 
@@ -285,9 +285,14 @@ fpol_image = postfix["fpol"]
 
 
 # plot lobes and their dispersion
+# plot_rm_for_lobes(
+#     rot_meas_image=postfix["rm"],
+#     e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
+#     vmin=-100, vmax=100)
+
 plot_rm_for_lobes(
     rot_meas_image=postfix["rm"],
-    e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
+    e_mask="from_rick/masks/east-lobe-572.fits", w_mask="from_rick/masks/west-lobe-572.fits",
     vmin=-100, vmax=100)
 
 
