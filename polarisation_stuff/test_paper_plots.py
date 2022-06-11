@@ -16,7 +16,7 @@ from ipdb import set_trace
 ######################################################################################
 ## Plot polarised intensity for each channel
 
-def plot_polarised_intensity(data=None, im_name=None, mask_name=None):
+def plot_polarised_intensity(data=None, im_name=None, mask_name=None, oup=None):
     """
     Input
     -----
@@ -41,13 +41,13 @@ def plot_polarised_intensity(data=None, im_name=None, mask_name=None):
         lpol = np.abs(data[chan])
         ax[chan].imshow(lpol, cmap="coolwarm", origin="lower")
     fig.tight_layout()
-    fig.savefig("lin_pol.svg")
+    fig.savefig(oup+"-lin_pol.svg")
     # plt.show()
 
 ######################################################################################
 ## Plot fractional polzn for each channel
 
-def plot_fractional_polzn(data=None, im_name=None, mask_name=None):
+def plot_fractional_polzn(data=None, im_name=None, mask_name=None, oup=None):
     """
     Input
     -----
@@ -74,7 +74,7 @@ def plot_fractional_polzn(data=None, im_name=None, mask_name=None):
         ax[chan].imshow(np.log(fpol), origin="lower", cmap="coolwarm")
     fig.tight_layout()
     #plt.colorbar()
-    fig.savefig("fpol.svg")
+    fig.savefig(oup+"-fpol.svg")
     # plt.show()
 
 
@@ -154,7 +154,7 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
 
     return axis
 
-def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name):
+def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name, oup=None):
     i_data = rfu.get_masked_data(i_name, mask_name)
     fpol_data = rfu.get_masked_data(fpol_name, mask_name)
     pa_data = rfu.get_masked_data(pa_name, mask_name)
@@ -163,7 +163,7 @@ def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name):
     ax = add_contours(ax, i_data)
     ax = add_magnetic_vectors(ax, fpol_data, pa_data)
     fig.tight_layout()
-    fig.savefig("intense_mfield.svg")
+    fig.savefig(oup+"-intense_mfield.svg")
     # plt.show()
 
 
@@ -172,7 +172,7 @@ def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name):
 ###################################
 # plot lobes with the histograms left and right
 
-def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None):
+def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=None):
     rot_meas = rfu.read_image_cube(rot_meas_image)["data"]
     w_lobe_mask = rfu.read_image_cube(w_mask, mask=True)["data"]
     e_lobe_mask = rfu.read_image_cube(e_mask, mask=True)["data"]
@@ -213,7 +213,7 @@ def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None):
     plt.subplots_adjust(wspace=.5, hspace=0)
 
     fig.tight_layout()
-    fig.savefig("lobes_rm.svg")
+    fig.savefig(oup+"-lobes_rm.svg")
     # plt.show()
 
 
@@ -250,7 +250,8 @@ def make_masks_from_ricks_data():
 ######################################################################################
 
 # prefix = "turbo"
-prefix = "from_rick/outputs/with-NHS-data-mask"
+# prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-NHS-data-mask"
+prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-ricks-data-mask"
 postfix = {
     "amp" : f'{prefix}-p0-peak-rm.fits',
     "angle" : f'{prefix}-PA-pangle-at-peak-rm.fits',
@@ -273,8 +274,8 @@ stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
 
 
 pica_i_image = "I-MFS.fits"
-# pica_mask = "masks/nhs-mask-572.fits"
-pica_mask = "from_rick/masks/ricks-data-mask.fits"
+# pica_image = "I-hs-MFS.fits"
+pica_mask = "masks/nhs-mask-572.fits"
 
 pica_i_data = rfu.get_masked_data(pica_i_image, pica_mask)
 
@@ -285,20 +286,15 @@ fpol_image = postfix["fpol"]
 
 
 # plot lobes and their dispersion
-# plot_rm_for_lobes(
-#     rot_meas_image=postfix["rm"],
-#     e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
-#     vmin=-100, vmax=100)
-
 plot_rm_for_lobes(
     rot_meas_image=postfix["rm"],
-    e_mask="from_rick/masks/east-lobe-572.fits", w_mask="from_rick/masks/west-lobe-572.fits",
-    vmin=-100, vmax=100)
+    e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
+    vmin=-100, vmax=100, oup=prefix)
 
 
 # plot fpol
-# plot_fractional_polzn(stokes["f_pol"])
-# plot_polarised_intensity(stokes["l_pol"])
+# plot_fractional_polzn(stokes["f_pol"], oup=prefix)
+# plot_polarised_intensity(stokes["l_pol"], oup=prefix)
 
-plot_intensity_vectors(pica_i_image, fpol_image, pangle_image, pica_mask)
+plot_intensity_vectors(pica_i_image, fpol_image, pangle_image, pica_mask, oup=prefix)
 

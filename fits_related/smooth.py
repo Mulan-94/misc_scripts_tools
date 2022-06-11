@@ -8,7 +8,7 @@ import numpy as np
 from astropy.io import fits
 from glob import glob
 from casacore.tables import table
-
+from ipdb import set_trace
 logging.basicConfig()
 snitch = logging.getLogger("sade")
 snitch.setLevel(logging.INFO)
@@ -31,6 +31,10 @@ def get_arguments():
     reqs.add_argument("-order", "--polynomial-order", dest="poly_order",
         default=None, metavar="", type=int,
         help="Order of the spectral polynomial")
+    reqs.add_argument("-stokes", dest="stokes",
+        default="I", metavar="", type=str,
+        help="""Which stokes model to extrapolate. Write as single streing e.g
+        IQUV. Default 'I'""")
     return parser
 
 
@@ -169,7 +173,12 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     mask = np.any(model, axis=0)
 
     # components excluding zeros
-    beta = model[:, mask]
+    beta = np.zeros_like(model)
+    beta[:, mask] = model[:, mask]
+    beta = beta.reshape(beta.shape[0], beta.size//beta.shape[0])
+    # beta = model[:, mask]
+
+    
     if spectral_poly_order > infreqs.size:
         raise ValueError("spectral-poly-order can't be larger than nband")
 
@@ -203,8 +212,9 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     betaout = betaout.reshape(betaout.shape[0], nx, ny)
     
     modelout = np.zeros((nchan, nx, ny))
-    modelout = betaout[:, mask]
-    modelout = modelout.reshape(nchan, nx, ny)
+    # modelout = betaout[:, mask]
+    # modelout = modelout.reshape(nchan, nx, ny)
+    modelout = betaout
     return modelout
 
 
@@ -225,7 +235,7 @@ def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out
             temp_hdu.data[0] = new_data
         elif temp_hdu.data.ndim == 2:
             temp_hdu.data = new_data
-        temp_hdu_list.writeto(out_fits)
+        temp_hdu_list.writeto(out_fits, overwrite=True)
     snitch.info(f"New file written to: {out_fits}")
     return
 
@@ -244,10 +254,17 @@ def main():
 
     ref_freq = get_ms_ref_freq(args.ms_name)  
 
-    for stokes in "IQUV":
+    for stokes in args.stokes.upper():
         snitch.info(f"Running Stoke's {stokes}")
+        
+        input_pref = os.path.abspath(args.input_prefix)
+        images_list = sorted(glob(f"{input_pref}*00*{stokes}-model*.fits"))
+        if len(images_list) == 0:
+            images_list = sorted(glob(f"{input_pref}*00*-model*.fits"))
+        
+        if len(images_list) == 0:
+            continue
 
-        images_list = sorted(glob(f"{args.input_prefix}*00*{stokes}*model*.fits"))
         im_heads = []
 
         for im_name in images_list:

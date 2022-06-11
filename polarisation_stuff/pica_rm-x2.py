@@ -165,6 +165,9 @@ def call_fitting(args, wavelengths=None):
     nfp_peak_idx = int(np.ceil(nfp.size/2))
     peak_fpol = nfp[nfp_peak_idx]
 
+    # if peak_fpol > 1:
+    #     peak_fpol = np.nan
+
     return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol
 
 
@@ -227,6 +230,8 @@ def main():
     if args.ifits:
         idata, ihdr = read_data(args.ifits) # run I-cube
         fp_data = (qdata/idata) + 1j * (udata/idata)
+        # high point[6, 224, 111] 
+        # set_trace()
 
 
     pdata = qdata + 1j * udata
@@ -302,7 +307,12 @@ if __name__=='__main__':
 
     """
     Running
+    
     time python pica_rm-x2.py -q Q-image-cubes.fits -u U-image-cubes.fits -i I-image-cubes.fits -ncore 120 -o turbo -f Frequencies-PicA-Masked.txt -mask true_mask_572.fits
+
+    python pica_rm-x2.py -q Q-image-cubes.fits -u U-image-cubes.fits -i I-image-cubes.fits -ncore 120 -o from_rick/outputs/with-NHS-data-mask -f Frequencies-PicA-Masked.txt -mask masks/nhs-mask-572.fits
+
+    python pica_rm-x2.py -q Q-image-cubes.fits -u U-image-cubes.fits -i I-image-cubes.fits -ncore 120 -o from_rick/outputs/with-ricks-data-mask -f Frequencies-PicA-Masked.txt -mask from_rick/masks/ricks-data-mask.fits
 
     """
     
