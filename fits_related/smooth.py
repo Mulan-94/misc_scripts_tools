@@ -8,7 +8,9 @@ import numpy as np
 from astropy.io import fits
 from glob import glob
 from casacore.tables import table
-from ipdb import set_trace
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+
 logging.basicConfig()
 snitch = logging.getLogger("sade")
 snitch.setLevel(logging.INFO)
@@ -31,6 +33,8 @@ def get_arguments():
     reqs.add_argument("-order", "--polynomial-order", dest="poly_order",
         default=None, metavar="", type=int,
         help="Order of the spectral polynomial")
+    reqs.add_argument("-nthreads", dest="nthreads", default=10, metavar="",
+        type=int, help="Number of threads to use in this")
     reqs.add_argument("-stokes", dest="stokes",
         default="I", metavar="", type=str,
         help="""Which stokes model to extrapolate. Write as single streing e.g
@@ -240,6 +244,14 @@ def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out
     return
 
 
+def write_model_out(chan_num, temp_fname, output_dir, cdelt, models, freqs):
+    outname = os.path.basename(temp_fname)
+    outname = re.sub(r"(\d){4}", f"{chan_num}".zfill(4), outname)
+    outname = os.path.join(output_dir, outname)
+    gen_fits_file_from_template(
+        temp_fname, freqs[chan_num], cdelt,
+        models[chan_num], outname)
+
 def main():
     args = get_arguments().parse_args()
 
@@ -254,13 +266,16 @@ def main():
 
     ref_freq = get_ms_ref_freq(args.ms_name)  
 
+    snitch.info(f"Specified -stokes: {args.stokes.upper()}")
     for stokes in args.stokes.upper():
         snitch.info(f"Running Stoke's {stokes}")
         
         input_pref = os.path.abspath(args.input_prefix)
-        images_list = sorted(glob(f"{input_pref}*00*{stokes}-model*.fits"))
+        images_list = sorted(glob(
+                os.path.join(input_pref, f"*00*{stokes}-model*.fits")))
         if len(images_list) == 0:
-            images_list = sorted(glob(f"{input_pref}*00*-model*.fits"))
+            images_list = sorted(glob(
+                os.path.join(input_pref, f"*00*-model*.fits")))
         
         if len(images_list) == 0:
             continue
@@ -286,13 +301,23 @@ def main():
         out_model = interp_cube(model, w_sums, input_center_freqs, out_freqs,
                                 ref_freq, args.poly_order)
 
-        for chan in range(args.channels_out):
-            outname = os.path.basename(images_list[0])
-            outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
-            outname = os.path.join(output_dir, outname)
-            gen_fits_file_from_template(
-                images_list[0], out_freqs[chan], new_cdelt, out_model[chan],
-                outname)
+        # for chan in range(args.channels_out):
+        #     outname = os.path.basename(images_list[0])
+        #     outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
+        #     outname = os.path.join(output_dir, outname)
+        #     gen_fits_file_from_template(
+        #         images_list[0], out_freqs[chan], new_cdelt, out_model[chan],
+        #         outname)
+        
+        results = []
+        with ThreadPoolExecutor(args.nthreads) as executor:
+            results = executor.map(
+                partial(write_model_out, temp_fname=images_list[0],
+                        output_dir=output_dir, cdelt=new_cdelt,
+                        models=out_model, freqs=out_freqs), 
+                range(args.channels_out))
+
+        results = list(results)
         
         snitch.info("Done")
 
