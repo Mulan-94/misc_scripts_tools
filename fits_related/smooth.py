@@ -11,6 +11,10 @@ from casacore.tables import table
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
+import dask.array as da
+
+from ipdb import set_trace
+
 logging.basicConfig()
 snitch = logging.getLogger("sade")
 snitch.setLevel(logging.INFO)
@@ -180,6 +184,9 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     beta = np.zeros_like(model)
     beta[:, mask] = model[:, mask]
     beta = beta.reshape(beta.shape[0], beta.size//beta.shape[0])
+
+    # convert this to a dask array
+    beta = da.from_array(beta, chunks=(beta.shape[0], 10_000_000//beta.shape[0]))
     # beta = model[:, mask]
 
     
@@ -200,9 +207,14 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     for i in range(1, spectral_poly_order+1):
         Xfit[:, i-1] = (whigh**i - wlow**i)/(i*wdiff)
 
-    dirty_comps = Xfit.T.dot(wsums*beta)
-    hess_comps = Xfit.T.dot(wsums*Xfit)
-    comps = np.linalg.solve(hess_comps, dirty_comps)
+    # dirty_comps = Xfit.T.dot(wsums*beta)
+    dirty_comps = da.dot(Xfit.T, wsums*beta)
+
+    # hess_comps = Xfit.T.dot(wsums*Xfit)
+    hess_comps = da.dot(Xfit.T, wsums*Xfit)
+
+    # comps = np.linalg.solve(hess_comps, dirty_comps)
+    comps = da.linalg.solve(hess_comps, dirty_comps)
 
     w = outfreqs/ref_freq
 
@@ -212,7 +224,9 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
     
     Xeval = w[:, np.newaxis]**np.arange(spectral_poly_order)[np.newaxis, :]
 
-    betaout = Xeval.dot(comps)
+    # betaout = Xeval.dot(comps)
+    betaout = da.dot(Xeval, comps)
+
     betaout = betaout.reshape(betaout.shape[0], nx, ny)
     
     modelout = np.zeros((nchan, nx, ny))
@@ -246,7 +260,7 @@ def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out
 
 def write_model_out(chan_num, temp_fname, output_dir, cdelt, models, freqs):
     outname = os.path.basename(temp_fname)
-    outname = re.sub(r"(\d){4}", f"{chan_num}".zfill(4), outname)
+    outname = re.sub(r"-(\d){4}-", "-"+f"{chan_num}".zfill(4)+"-", outname)
     outname = os.path.join(output_dir, outname)
     gen_fits_file_from_template(
         temp_fname, freqs[chan_num], cdelt,
