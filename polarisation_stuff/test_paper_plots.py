@@ -251,7 +251,8 @@ def make_masks_from_ricks_data():
 
 # prefix = "turbo"
 # prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-NHS-data-mask"
-prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-ricks-data-mask"
+# prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-ricks-data-mask"
+prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-NHS-data-mask"
 postfix = {
     "amp" : f'{prefix}-p0-peak-rm.fits',
     "angle" : f'{prefix}-PA-pangle-at-peak-rm.fits',
