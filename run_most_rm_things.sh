@@ -33,15 +33,16 @@ echo "Setting up variables, and the selection of channels";
 stokes="I Q U V";
 sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" "44" "45" "46" "47" "48" "49" "50" "51" "52" "53" "54" "55" "60" "72" "73" "74");
 
-orig_cubes="intermediates/original-cubes";
-sel_cubes="intermediates/selection-cubes";
-conv_cubes="intermediates/conv-selection-cubes";
-plots="intermediates/beam-plots";
-prods="products";
+export orig_cubes="intermediates/original-cubes";
+export sel_cubes="intermediates/selection-cubes";
+export conv_cubes="intermediates/conv-selection-cubes";
+export plots="intermediates/beam-plots";
+export prods="products";
+mask_dir = $HOME/pica/reduction/experiments/emancipation/masks;
 
-
+# echo -e "\n############################################################"
 # echo "Make these directories";
-# echo -n "\n############################################################\n"
+# echo -e "############################################################\n"
 # mkdir -p $orig_cubes;
 # mkdir -p $sel_cubes;
 # mkdir -p $conv_cubes;
@@ -58,37 +59,42 @@ prods="products";
 # 	done;
 
 
+# echo -e "\n############################################################"
 # echo "copy relevant channels' images to this folder for IQUV";
-# echo -n "\n############################################################\n"
+# echo -e "############################################################\n"
 # for n in ${sel[@]};
 # 	do
 # 		cp ../*-[0-9][0-9]$n-*-*image* .;
 # 	done
 
 
+# echo -e "\n############################################################"
 # echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
 
 # #Replacing all begins of strings here with ../
 # sed -i 's/^/\.\.\//g' selected-freq-images.txt
 
 
+# echo -e "\n############################################################"
 # echo "write out the selected freqs into a single file for easier work. This is for use in the RM synth for wavelength":
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # for im in *-[0-9][0-9][0-9][0-9]*-I-image.fits;
 # 	do
 # 		fitsheader -k CRVAL3 $im |  grep -i CRVAL3 >> frequencies.txt;
 # 	done;
 
 
+# echo -e "\n############################################################"
 # echo "Cleanup freqs file by replacing CRVAL3 = and all spaces after it with emptiness";
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # sed -i "s/CRVAL3  =\ \+//g" frequencies.txt
 
 
+# echo -e "\n############################################################"
 # echo "Selections steps"
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # for s in $stokes;
 # 	do
 # 		echo "Make the selection cubes: ${s^^}";
@@ -105,34 +111,34 @@ prods="products";
 # 	done
 
 
-# echo -e "\n############################################################\n"
+# echo -e "\n############################################################"
 # echo "Delete the copied image files";
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # rm *-[0-9][0-9][0-9][0-9]-*image.fits
 
 
 
-# echo -e "\n############################################################\n"
+# echo -e "\n############################################################"
 # echo "Generate various interesting LoS above some certain threshold";
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # python qu_pol/scrap.py -rs 10 -t circle-t0.05 -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
 
 
-# echo -e "\n############################################################\n"
+# echo -e "\n############################################################"
 # echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/IQU-regions-mpc-*circle-t0.05 -od $prods/rm-plots -md 1200
 
 
-# echo -e "\n############################################################\n"
+# echo -e "\n############################################################"
 # echo "Generate interactive plots for the various LoS";
-# echo -e "\n############################################################\n"
+# echo -e "############################################################\n"
 # python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/IQU-regions-mpc-*-circle --yaml qu_pol/bokeh/plots.yml 
 
 
-echo -e "\n############################################################\n"
+echo -e "\n############################################################"
 echo "Do some RM maps, fpol maps and other maps";
 echo "Using my mask here, Don't know where yours is but if this step fails, check on that";
-echo -e "\n############################################################\n"
-python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o $prods/initial -mask ../../../masks/true_mask.fits -f frequencies.txt 
+echo -e "############################################################\n"
+python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt 
 
