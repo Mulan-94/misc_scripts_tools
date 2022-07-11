@@ -1,6 +1,10 @@
 import argparse
 import os
+import sys
 from glob import glob
+
+# Lexy: jUST being lazy, sort this out when I sort it out
+sys.path.append(os.getcwd())
 
 import numpy as np
 import matplotlib 
@@ -10,7 +14,7 @@ from scipy import signal
 
 # setting this to qu_po because of its location in the misc_scripts_and_tools
 # see https://stackoverflow.com/questions/61532337/python-modulenotfounderror-no-module-named
-from qu_pol.scrap import IOUtils
+from scrap import IOUtils
 
 from ipdb import set_trace
 
@@ -342,8 +346,7 @@ if __name__ == "__main__":
     opts = arg_parser().parse_args()
 
     for _i, data_dir in enumerate(opts.data_dirs):
-
-        if not os.path.isdir(opts.output_dir):
+        if not os.path.isdir(f"{opts.output_dir}-{_i}"):
             os.makedirs(f"{opts.output_dir}-{_i}")
 
         output_dir = f"{opts.output_dir}-{_i}"

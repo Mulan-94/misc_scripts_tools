@@ -1,16 +1,16 @@
 #!/bin/bash
 set -e
 
-echo "******************************************************";
-echo "   Welcome to MOST THINgs RM with Lexy";
-echo "******************************************************";
-echo "\n Place this script where the products will be placed"
-echo "This script requires some preliminary setup as follows";
-echo "In this same directory"
+echo -e "******************************************************";
+echo -e "   Welcome to MOST THINgs RM with Lexy";
+echo -e "******************************************************";
+echo -e "\n Place this script where the products will be placed"
+echo -e "This script requires some preliminary setup as follows";
+echo -e "In this same directory"
 echo -e "\n  1. Access to qu_pol from misc_tools_n_scripts/qu_pol";
-echo "  2. Access to plotting_bmaj_bmin.py from misc_tools_n_scripts/fits_related/";
-echo -e"  3. Images being worked on should be in this dirs' parent directory '../'\n";
-echo "******************************************************";
+echo -e "  2. Access to plotting_bmaj_bmin.py from misc_tools_n_scripts/fits_related/";
+echo -e "  3. Images being worked on should be in this dirs' parent directory '../'\n";
+echo -e "******************************************************";
 
 
 
@@ -35,78 +35,104 @@ sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" 
 
 orig_cubes="intermediates/original-cubes";
 sel_cubes="intermediates/selection-cubes";
-conv_cubes="intermediates/conv-selection-cube";
+conv_cubes="intermediates/conv-selection-cubes";
 plots="intermediates/beam-plots";
 prods="products";
 
 
-echo "Make these directories";
-mkdir -p $orig_cubes;
-mkdir -p $sel_cubes;
-mkdir -p $conv_cubes;
-mkdir -p $plots;
-mkdir -p $prods;
+# echo "Make these directories";
+# echo -n "\n############################################################\n"
+# mkdir -p $orig_cubes;
+# mkdir -p $sel_cubes;
+# mkdir -p $conv_cubes;
+# mkdir -p $plots;
+# mkdir -p $prods;
 
-for s in $stokes;
-	do
-		echo "make cubes from ALL the output images: ${s^^}";
-		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ ../*-[0-9][0-9][0-9][0-9]-$s-image.fits;
+# for s in $stokes;
+# 	do
+# 		echo "make cubes from ALL the output images: ${s^^}";
+# 		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ ../*-[0-9][0-9][0-9][0-9]-$s-image.fits;
 
-		echo "Plot the beams to identify which should be flagged";
-		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
-	done;
-
-
-echo "copy relevant channels' images to this folder for IQUV";
-for n in ${sel[@]};
-	do
-		cp ../*-[0-9][0-9]$n-*-*image* .;
-	done
+# 		echo "Plot the beams to identify which should be flagged";
+# 		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
+# 	done;
 
 
-echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
-ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
+# echo "copy relevant channels' images to this folder for IQUV";
+# echo -n "\n############################################################\n"
+# for n in ${sel[@]};
+# 	do
+# 		cp ../*-[0-9][0-9]$n-*-*image* .;
+# 	done
 
 
-echo "write out the selected freqs into a single file for easier work. This is for use in the RM synth for wavelength":
-for im in *-[0-9][0-9][0-9][0-9]*-I-image.fits;
-	do
-		fitsheader -k CRVAL3 $im |  grep -i CRVAL3 >> frequencies.txt;
-	done;
+# echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
+# echo -e "\n############################################################\n"
+# ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
 
-echo "Cleanup freqs file by replacing CRVAL3 = and all spaces after it with emptiness";
-sed -i "s/CRVAL3  =\ \+//g" frequencies.txt
+# #Replacing all begins of strings here with ../
+# sed -i 's/^/\.\.\//g' selected-freq-images.txt
 
 
-for s in $stokes;
-	do
-		echo "Make the selection cubes: ${s^^}";
-		fitstool.py --stack=$sel_cubes/${s,,}-sel-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
+# echo "write out the selected freqs into a single file for easier work. This is for use in the RM synth for wavelength":
+# echo -e "\n############################################################\n"
+# for im in *-[0-9][0-9][0-9][0-9]*-I-image.fits;
+# 	do
+# 		fitsheader -k CRVAL3 $im |  grep -i CRVAL3 >> frequencies.txt;
+# 	done;
+
+
+# echo "Cleanup freqs file by replacing CRVAL3 = and all spaces after it with emptiness";
+# echo -e "\n############################################################\n"
+# sed -i "s/CRVAL3  =\ \+//g" frequencies.txt
+
+
+# echo "Selections steps"
+# echo -e "\n############################################################\n"
+# for s in $stokes;
+# 	do
+# 		echo "Make the selection cubes: ${s^^}";
+# 		fitstool.py --stack=$sel_cubes/${s,,}-sel-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
 		
-		echo "Convolve the cubes to the same resolution";
-		spimple-imconv -image $sel_cubes/${s,,}-sel-cube.fits -o $conv_cubes/${s,,}-conv ;
+# 		echo "Convolve the cubes to the same resolution";
+# 		spimple-imconv -image $sel_cubes/${s,,}-sel-cube.fits -o $conv_cubes/${s,,}-conv ;
 
-		echo "Just check if the beam sizes are the same";
-		python plotting_bmaj_bmin.py -c $conv_cubes/${s,,}-conv-cube.fits -o $plots/conv-bmaj-bmin-$s;
-	done
+# 		echo "Renamin output file from spimple because the naming here is weird";
+# 		mv $conv_cubes/${s,,}-conv.convolved.fits $conv_cubes/${s,,}-conv.fits
 
-
-echo "Delete the copied image files";
-rm *-[0-9][0-9][0-9][0-9]-*image.fits
-
+# 		echo "Just check if the beam sizes are the same";
+# 		python plotting_bmaj_bmin.py -c $conv_cubes/${s,,}-conv.fits -o $plots/conv-bmaj-bmin-$s;
+# 	done
 
 
-echo "Generate various interesting LoS above some certain threshold";
-python qu_pol/scrap.py -rs 20 -t circle-t0.05 -f selected-freq-images.txt --threshold 0.05 --output-dir $prods ;
-
-echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
-python qu_pol/rm_synthesis.py -id IQU-regions-mpc-*circle-t0.05 -od $prods/rm-plots -md 1200
-
-echo "Generate interactive plots for the various LoS";
-python qu_pol/bokeh/plot_bk.py -id IQU-regions-mpc-*-circle --yaml qu_pol/bokeh/plots.yml 
+# echo -e "\n############################################################\n"
+# echo "Delete the copied image files";
+# echo -e "\n############################################################\n"
+# rm *-[0-9][0-9][0-9][0-9]-*image.fits
 
 
+
+# echo -e "\n############################################################\n"
+# echo "Generate various interesting LoS above some certain threshold";
+# echo -e "\n############################################################\n"
+# python qu_pol/scrap.py -rs 10 -t circle-t0.05 -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
+
+
+# echo -e "\n############################################################\n"
+# echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
+# echo -e "\n############################################################\n"
+# python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/IQU-regions-mpc-*circle-t0.05 -od $prods/rm-plots -md 1200
+
+
+# echo -e "\n############################################################\n"
+# echo "Generate interactive plots for the various LoS";
+# echo -e "\n############################################################\n"
+# python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/IQU-regions-mpc-*-circle --yaml qu_pol/bokeh/plots.yml 
+
+
+echo -e "\n############################################################\n"
 echo "Do some RM maps, fpol maps and other maps";
 echo "Using my mask here, Don't know where yours is but if this step fails, check on that";
-python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o ./products/initial -mask ../../masks/true_mask.fits -f frequencies.txt 
+echo -e "\n############################################################\n"
+python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o $prods/initial -mask ../../../masks/true_mask.fits -f frequencies.txt 
 

@@ -17,12 +17,16 @@ import numpy as np
 import warnings
 
 # from casatasks import imstat
+import astropy.units as u
 from astropy.io import fits
+from astropy.coordinates import SkyCoord, FK5
+from astropy.wcs import WCS
 from glob import glob
 from concurrent import futures
 from functools import partial
 from time import perf_counter
 from itertools import product, chain
+from regions import Regions, PixCoord, CirclePixelRegion, RectanglePixelRegion
 from ipdb import set_trace
 
 plt.style.use("bmh")
@@ -58,7 +62,7 @@ class IOUtils:
     @staticmethod
     def make_out_dir(dir_name):
         if not os.path.isdir(dir_name):
-            os.mkdir(dir_name)
+            os.makedirs(dir_name)
         return os.path.relpath(dir_name)
 
 
@@ -91,11 +95,19 @@ class IOUtils:
         # Get mean flux over the pixels
         intense_cut = FitsManip.get_data_cut(reg, data)
 
-
         if np.std(intense_cut) > threshold*image_noise:
             return True
         else:
             return False
+
+    @staticmethod
+    def read_region_as_pixels(reg_file, wcs):
+        # convert to pixel values otherwise we don't get to_mask method
+        regs = Regions.read(reg_file, format="ds9").regions
+        for _, reg in enumerate(regs):
+            regs[_] = regs[_].to_pixel(wcs)
+
+        return regs
 
     @classmethod
     def write_valid_regions(cls, regfile, fname, threshold=20, overwrite=True):
@@ -106,8 +118,14 @@ class IOUtils:
             with open(regfile, "r") as fil:
                 lines = fil.readlines()
 
-            regs = regions.Regions.read(regfile, format="ds9")
-            noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
+            # get wcs information through whatever image is used here in fname
+            # Usually and hopefully it is an I image
+            wcs = IOUtils.get_wcs(fname)
+
+            regs = IOUtils.read_region_as_pixels(regfile, wcs)
+            noise_fname = os.path.join(os.path.dirname(regfile), "noise_area.reg")
+            noise_reg, = IOUtils.read_region_as_pixels(noise_fname, wcs)
+
 
             #identify what is thought to be valid
             chosen = []
@@ -132,7 +150,46 @@ class IOUtils:
                 fil.writelines(nlines)
 
     @staticmethod
-    def generate_regions(reg_fname, factor=50, max_w=572, max_h=572, overwrite=True):
+    def world_to_pixel_coords(ra, dec, wcs_ref):
+        """
+        Convert world coordinates to pixel coordinates.
+        The assumed reference is FK5
+        ra: float
+            Right ascension in degrees
+        dec: float
+            Declination in degrees
+        wcs_ref:
+            Image to use for WCS information
+
+        Returns
+        -------
+            x and y pixel information
+        """
+        if isinstance(wcs_ref, str):
+            wcs = IOUtils.get_wcs(wcs_ref)
+        else:
+            wcs = wcs_ref
+        world_coord = FK5(ra=ra*u.deg, dec=dec*u.deg)
+        skies = SkyCoord(world_coord)
+        x, y = skies.to_pixel(wcs)
+        return int(x), int(y)
+
+    @staticmethod
+    def get_wcs(wcs_ref, pixels=False):
+        wcs = WCS(fits.getheader(wcs_ref))
+        if wcs.naxis > 2:
+            dropped = wcs.naxis - 2
+            # remove extra and superflous axes. These become problematic
+            for _ in range(dropped):
+                    wcs = wcs.dropaxis(-1)
+
+        if pixels:
+            return wcs.pixel_shape
+        else:
+            return wcs
+
+    @staticmethod
+    def generate_regions(reg_fname, wcs_ref, factor=50, overwrite=True):
         """
         Ref: https://ds9.si.edu/doc/ref/region.html
         Create a DS9 region file containing a bunch of regions
@@ -144,17 +201,30 @@ class IOUtils:
                 Maximum pixel image height or width. 
                 So that regions don't go beyound image dims
         """
+        # converted by
+        # pix = regions.PixCoord(569, 450).to_sky(wcs)
+    
         # left to right
-        width_range = 74, 569
+        # ra in degrees
+        w_range = 80.04166306500294, 79.84454319889994
 
         # bottom to top
-        height_range = 145, 450
+        # dec in degrees
+        h_range = -45.81799666164118, -45.73325018138195
+
+        max_w, max_h =  IOUtils.get_wcs(wcs_ref, pixels=True)
+        wcs =  IOUtils.get_wcs(wcs_ref)
+        start =  IOUtils.world_to_pixel_coords(w_range[0], h_range[0], wcs)
+        end =  IOUtils.world_to_pixel_coords(w_range[1], h_range[1], wcs)
+
+        width_range, height_range = (start[0], end[0]), (start[1], end[1])
+
         header = [
             "# Region file format: DS9 CARTA 2.0.0",
-            ('global color=green dashlist=8 3 width=1 ' +
+            ('global color=#2EE6D6 dashlist=8 3 width=2 ' +
             'font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 ' +
             'edit=1 move=1 delete=1 include=1 source=1'),
-            "physical"
+            "FK5"
         ]
 
         pts = []
@@ -176,15 +246,18 @@ class IOUtils:
 
         for height in range(*height_range, factor*2):
             for width in range(*width_range, factor*2):
-                # pts.append("circle({}, {}, {}) # color=#2EE6D6 width=2".format(width, height+factor, factor/2))
                 width = max_h if width > max_w else width
                 height = max_h if height > max_h else height
-                # pts.append(
-                #     "box({}, {}, {}, {}) # text={{reg_{}}}".format(
-                #         width, height, factor, factor, count))
-                pts.append("circle({}, {}, {})".format(width, height, factor))
+        
+                # sky = RectangulePixelRegion(PixCoord(width, height),
+                #             width=factor, height=factor).to_sky(wcs)
+                sky = CirclePixelRegion(PixCoord(width, height), radius=factor).to_sky(wcs)
+
+                pts.append("circle({:.6f}, {:.6f}, {:.6f}\") # text={{reg_{}}}".format(
+                            sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, count))
                 count += 1
 
+        
         if ".reg" not in reg_fname:
             reg_fname += f"-{factor}.reg"
 
@@ -195,6 +268,14 @@ class IOUtils:
             logging.info(f"Regions file written to: {reg_fname}")
         else:
             logging.info(f"File already available at: {reg_fname}")
+
+        
+        logging.info("Also writting default noise region")
+        with open(os.path.join(os.path.dirname(reg_fname), "noise_area.reg"), "w") as fil:
+            fil.writelines(
+                [p+"\n" for p in header+["box(80.042034, -45.713596, 35.1800\", 29.5500\", 0)"]])
+            logging.info("Noise region written")
+            
         return reg_fname
 
 
@@ -595,7 +676,8 @@ class FitsManip:
     
     @classmethod
     def get_noise(cls, noise_reg, fname, data=None):
-        if not isinstance(noise_reg, regions.Region):
+        # if not isinstance(noise_reg, Regions):
+        if isinstance(noise_reg, float) or isinstance(noise_reg, int):
             noise = noise_reg
         else:
             if data is None:
@@ -633,7 +715,7 @@ class FitsManip:
         if (MathUtils.are_all_nan(intense_cut) or MathUtils.are_all_zeroes(intense_cut) or
             MathUtils.is_infinite(global_noise)):
             # skip all the nonsence if all the data is Nan
-            logging.debug(f"Skipping region:{reg.meta['label']} {fname} because NaN/Zeroes/inf ")
+            logging.debug(f"Skipping region:{reg.meta['text']} {fname} because NaN/Zeroes/inf ")
             # im_data["flux_jybm"] = im_data["flux_jy"] = None
             im_data["flux_jybm"] = im_data["noise"] = im_data["image_noise"] = None
             return im_data
@@ -688,11 +770,12 @@ class FitsManip:
         return data_cut
 
     @classmethod
-    def get_image_stats2(cls, file_core, images, regs, global_noise, noise_reg, sig_factor):
+    def get_image_stats2(cls, file_core, images, regs, global_noise, noise_reg,
+        sig_factor, output_dir="scrap-outputs"):
         fluxes, waves = [], []
         logging.info("starting get_image_stats")
         for reg in regs:
-            logging.info(f"Region: {reg.meta['label']}")
+            logging.info(f"Region: {reg.meta['text']}")
             with futures.ProcessPoolExecutor(max_workers=16) as executor:
                 results = executor.map(
                     partial(cls.extract_stats2, reg=reg, global_noise=global_noise,
@@ -708,13 +791,16 @@ class FitsManip:
             
             outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": [], "image_noise": []}
                         for _ in "IQU"}
-
+            
             for res in results:
+                if res["stokes"] not in outs:
+                    continue
                 outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
                 outs[res["stokes"]]["noise"].append(res["noise"])
                 outs[res["stokes"]]["image_noise"].append(res["image_noise"])
+    
             
             checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
 
@@ -729,8 +815,9 @@ class FitsManip:
                 fout["fpol"] = MathUtils.fractional_polzn(fout["I"], fout["Q"],
                     fout["U"], noise=noise_reg, thresh=sig_factor)
 
-                out_dir = IOUtils.make_out_dir(f"IQU-{file_core}")
-                outfile = os.path.join(out_dir, f"{reg.meta['label']}")
+                out_dir = IOUtils.make_out_dir(
+                    os.path.join(output_dir, f"IQU-{file_core}"))
+                outfile = os.path.join(out_dir, f"{reg.meta['text']}")
                 np.savez(outfile, **fout)
             
         logging.info(f"Done saving data files")
@@ -757,7 +844,8 @@ def parser():
         \r===================================================================+
         """
     )
-    parsing = argparse.ArgumentParser()
+    parsing = argparse.ArgumentParser(usage="%(prog)s [options]",
+        description="Generate Faraday spectra for various LoS from image cubes")
     parsing.add_argument("-f", "--infile", dest="in_list", type=str,
         metavar="", required=True,
         help="File containing an organised list of the input image names."+
@@ -773,6 +861,12 @@ def parser():
         help="Threshold for regions in which to make masks. Default is 5")
     parsing.add_argument("-ro", "--regions-only", dest="r_only",
         action="store_true", help="Generate only region files")
+    parsing.add_argument("-wcs-ref", "--wcs-reference", dest="wcs_ref",
+        metavar="", default=None,
+        help="The image to use to get the reference WCS")
+    parsing.add_argument("--output-dir", dest="output_dir", type=str,
+        default="scrap-outputs",
+        help="where to dump output")
 
 
     parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
@@ -819,7 +913,7 @@ def parser():
 
 if __name__ == "__main__":
     opts = parser().parse_args()
-
+    
     if opts.testing is None:
         testing = ""
     else:
@@ -858,7 +952,10 @@ if __name__ == "__main__":
                 logging.info(f"Using {reg_file} as region file")
             else:
                 # factor here is the size of radius of box or circle
-                reg_file = IOUtils.generate_regions(f"regions/beacons-t{opts.r_thresh}", 
+                reg_dir = IOUtils.make_out_dir(os.path.join(opts.output_dir, "regions"))
+                reg_file = IOUtils.generate_regions(
+                    os.path.join(reg_dir, f"beacons-t{opts.r_thresh}"), 
+                    wcs_ref=opts.wcs_ref,
                     factor=factor, overwrite=opts.noverwrite)
                 # because not user specified, I can edit however I want
                 IOUtils.write_valid_regions(reg_file, images[0],
@@ -868,7 +965,8 @@ if __name__ == "__main__":
             if opts.r_only:
                 continue
             
-            regs = regions.Regions.read(reg_file, format="ds9")
+            ref_wcs = IOUtils.get_wcs(opts.wcs_ref)
+            regs = IOUtils.read_region_as_pixels(reg_file, ref_wcs)
             
             logging.info(f"Working on Stokes IQU")
             logging.info(f"With {len(regs)} regions")
@@ -877,7 +975,9 @@ if __name__ == "__main__":
             if opts.noise:
                 global_noise = opts.noise
             else:
-                noise_reg, = regions.Regions.read("regions/noise_area.reg", format="ds9")
+                noise_reg, = IOUtils.read_region_as_pixels(
+                    os.path.join(os.path.dirname(reg_file), "noise_area.reg"),
+                    ref_wcs)
                 logging.info(f"Getting noise from {images[0]}")
                 global_noise = FitsManip.get_noise(noise_reg, images[0], data=None)
             
@@ -885,11 +985,12 @@ if __name__ == "__main__":
             logging.info(f"Sigma threshold: {opts.thresh}")
             logging.info(f"Noise threshold: {opts.thresh * global_noise}")
             
-            bn = FitsManip.get_image_stats2(file_core, images, regs, global_noise, noise_reg, sig_factor=opts.thresh)
+            bn = FitsManip.get_image_stats2(file_core, images, regs, global_noise, noise_reg, sig_factor=opts.thresh, output_dir=opts.output_dir)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
-                plot_dir = IOUtils.make_out_dir(f"plots-IQU-{file_core}")
+                plot_dir = IOUtils.make_out_dir(
+                    os.path.join(opts.output_dir, f"plots-IQU-{file_core}"))
                 pout = os.path.join(plot_dir,  f"IQU-{file_core}")
                 plotter(file_core, 
                     f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
@@ -907,7 +1008,8 @@ if __name__ == "__main__":
         for factor in opts.plot:
             for scale in opts.plot_scales:
                 file_core = f"regions-mpc-{factor}{testing}"
-                plot_dir = IOUtils.make_out_dir(f"plots-IQU-{file_core}")
+                plot_dir = IOUtils.make_out_dir(
+                    os.path.join(opts.output_dir, f"plots-IQU-{file_core}"))
                 pout = os.path.join(plot_dir,  f"IQU-{file_core}")
                 plotter(file_core, 
                     f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
