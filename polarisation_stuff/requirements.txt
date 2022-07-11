@@ -2,6 +2,12 @@ astropy
 regions
 matplotlib
 numpy
+bokeh
+scipy
+dask-ms
+owlcat
+spimple
+ipdb
 
 #SETUP instructions for this environment
 #+++++++++++++++++++++++++++++++++++++++++

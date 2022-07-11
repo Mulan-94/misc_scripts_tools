@@ -252,17 +252,21 @@ def write_data(model, name, o_file):
 def arg_parser():
     parser = ArgumentParser(
         usage="""
-\nExample
-\n
-\npython plot_bk.py -id IQU-regions-mpc-20-circle-sel-0.05 IQU-regions-mpc-20-correct-0.05
-\n\r=================+++++++++++++++++++++++===========
+Example
+
+python plot_bk.py -id IQU-regions-mpc-20-circle-sel-0.05 IQU-regions-mpc-20-correct-0.05
+=================+++++++++++++++++++++++===========
 """)
     parser.add_argument("-id", type=str, nargs="+", dest="i_dirs",
         help="Input directories")
     parser.add_argument("--yaml", type=str, nargs="+", dest="yamls",
         default=["plots.yml"],
         help="Yaml file containing the plots to be plotted.")
+    parser.add_argument("-od", "--output-dir", type=str, dest="odir",
+        default=None,
+        help="Where to dump outputs")
     return parser
+
 if __name__ == "__main__":
 
     opts = arg_parser().parse_args()
@@ -306,7 +310,10 @@ if __name__ == "__main__":
                                 sizing_mode="stretch_both", toolbar_location="left")
                 
                 #change to .json if you want a json output
-                o_dir = i_dir + "-plots"
+                if opts.odir is not None:
+                    o_dir = opts.odir
+                else:
+                    o_dir = i_dir + "-plots"
                 if not os.path.isdir(o_dir):
                     os.mkdir(o_dir)
                 o_file =os.path.join(o_dir, reg.replace("_", "") + ".html")

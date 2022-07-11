@@ -325,7 +325,7 @@ class Plotting:
             }
 
         fight = lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])
-        data_files = sorted(glob(f"./IQU-{file_core}/*.npz"), key=fight)
+        data_files = sorted(glob(f"./iqu-{file_core}/*.npz"), key=fight)
         n_qf = len(data_files)
         logging.info(f"Found {n_qf} QUI files")
 
@@ -439,7 +439,7 @@ class Plotting:
 
         fight = lambda x: int(os.path.splitext(os.path.basename(x))[0].split("_")[-1])
 
-        data_files = sorted(glob(f"./IQU-{file_core}/*.npz"), key=fight)
+        data_files = sorted(glob(f"./iqu-{file_core}/*.npz"), key=fight)
         n_qf = len(data_files)
         logging.info(f"Found {n_qf} QUI files")
 
@@ -816,7 +816,7 @@ class FitsManip:
                     fout["U"], noise=noise_reg, thresh=sig_factor)
 
                 out_dir = IOUtils.make_out_dir(
-                    os.path.join(output_dir, f"IQU-{file_core}"))
+                    os.path.join(output_dir, f"iqu-{file_core}"))
                 outfile = os.path.join(out_dir, f"{reg.meta['text']}")
                 np.savez(outfile, **fout)
             
@@ -990,10 +990,10 @@ if __name__ == "__main__":
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
                 plot_dir = IOUtils.make_out_dir(
-                    os.path.join(opts.output_dir, f"plots-IQU-{file_core}"))
-                pout = os.path.join(plot_dir,  f"IQU-{file_core}")
+                    os.path.join(opts.output_dir, f"plots-iqu-{file_core}"))
+                pout = os.path.join(plot_dir,  f"iqu-{file_core}")
                 plotter(file_core, 
-                    f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
+                    f"{plot_dir}/iqu-regions-mpc{testing}-{factor}",
                     ymin=opts.ymin, ymax=opts.ymax, xmin=opts.xmin, xmax=opts.xmax,
                     plot_qu=opts.plot_qu, plot_frac_pol=opts.plot_frac_pol,
                     plot_linear_pol=opts.plot_linear_pol)
@@ -1009,10 +1009,10 @@ if __name__ == "__main__":
             for scale in opts.plot_scales:
                 file_core = f"regions-mpc-{factor}{testing}"
                 plot_dir = IOUtils.make_out_dir(
-                    os.path.join(opts.output_dir, f"plots-IQU-{file_core}"))
-                pout = os.path.join(plot_dir,  f"IQU-{file_core}")
+                    os.path.join(opts.output_dir, f"plots-iqu-{file_core}"))
+                pout = os.path.join(plot_dir,  f"iqu-{file_core}")
                 plotter(file_core, 
-                    f"{plot_dir}/IQU-regions-mpc{testing}-{factor}",
+                    f"{plot_dir}/iqu-regions-mpc{testing}-{factor}",
                     xscale=scale, ymin=opts.ymin, ymax=opts.ymax,
                     xmin=opts.xmin, xmax=opts.xmax, plot_qu=opts.plot_qu,
                     plot_frac_pol=opts.plot_frac_pol,

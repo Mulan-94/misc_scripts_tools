@@ -38,7 +38,7 @@ export sel_cubes="intermediates/selection-cubes";
 export conv_cubes="intermediates/conv-selection-cubes";
 export plots="intermediates/beam-plots";
 export prods="products";
-mask_dir = $HOME/pica/reduction/experiments/emancipation/masks;
+mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
 
 # echo -e "\n############################################################"
 # echo "Make these directories";
@@ -118,22 +118,26 @@ mask_dir = $HOME/pica/reduction/experiments/emancipation/masks;
 
 
 
-# echo -e "\n############################################################"
-# echo "Generate various interesting LoS above some certain threshold";
-# echo -e "############################################################\n"
-# python qu_pol/scrap.py -rs 10 -t circle-t0.05 -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
+echo -e "\n############################################################"
+echo "Generate various interesting LoS above some certain threshold";
+echo -e "############################################################\n"
+
+#what to name the stuff
+data_suffix="circle-t0.05";
+
+python qu_pol/scrap.py -rs 10 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
 
 
-# echo -e "\n############################################################"
-# echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
-# echo -e "############################################################\n"
-# python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/IQU-regions-mpc-*circle-t0.05 -od $prods/rm-plots -md 1200
+echo -e "\n############################################################"
+echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
+echo -e "############################################################\n"
+python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
 
 
-# echo -e "\n############################################################"
-# echo "Generate interactive plots for the various LoS";
-# echo -e "############################################################\n"
-# python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/IQU-regions-mpc-*-circle --yaml qu_pol/bokeh/plots.yml 
+echo -e "\n############################################################"
+echo "Generate interactive plots for the various LoS";
+echo -e "############################################################\n"
+python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/*$data_suffix --yaml qu_pol/bokeh/plots.yml -od $prods/bokeh-plots
 
 
 echo -e "\n############################################################"
