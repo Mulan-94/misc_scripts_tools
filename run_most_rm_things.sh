@@ -38,83 +38,81 @@ export sel_cubes="intermediates/selection-cubes";
 export conv_cubes="intermediates/conv-selection-cubes";
 export plots="intermediates/beam-plots";
 export prods="products";
+export spis="products/spi-fitting";
+
 mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
 
-# echo -e "\n############################################################"
-# echo "Make these directories";
-# echo -e "############################################################\n"
-# mkdir -p $orig_cubes;
-# mkdir -p $sel_cubes;
-# mkdir -p $conv_cubes;
-# mkdir -p $plots;
-# mkdir -p $prods;
+echo -e "\n############################################################"
+echo "Make these directories";
+echo -e "############################################################\n"
+mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
 
-# for s in $stokes;
-# 	do
-# 		echo "make cubes from ALL the output images: ${s^^}";
-# 		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ ../*-[0-9][0-9][0-9][0-9]-$s-image.fits;
+for s in $stokes;
+	do
+		echo "make cubes from ALL the output images: ${s^^}";
+		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ ../*-[0-9][0-9][0-9][0-9]-$s-image.fits;
 
-# 		echo "Plot the beams to identify which should be flagged";
-# 		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
-# 	done;
+		echo "Plot the beams to identify which should be flagged";
+		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
+	done;
 
 
-# echo -e "\n############################################################"
-# echo "copy relevant channels' images to this folder for IQUV";
-# echo -e "############################################################\n"
-# for n in ${sel[@]};
-# 	do
-# 		cp ../*-[0-9][0-9]$n-*-*image* .;
-# 	done
+echo -e "\n############################################################"
+echo "copy relevant channels' images to this folder for IQUV";
+echo -e "############################################################\n"
+for n in ${sel[@]};
+	do
+		cp ../*-[0-9][0-9]$n-*-*image* .;
+	done
 
 
-# echo -e "\n############################################################"
-# echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
-# echo -e "############################################################\n"
-# ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
+echo -e "\n############################################################"
+echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
+echo -e "############################################################\n"
+ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
 
-# #Replacing all begins of strings here with ../
-# sed -i 's/^/\.\.\//g' selected-freq-images.txt
-
-
-# echo -e "\n############################################################"
-# echo "write out the selected freqs into a single file for easier work. This is for use in the RM synth for wavelength":
-# echo -e "############################################################\n"
-# for im in *-[0-9][0-9][0-9][0-9]*-I-image.fits;
-# 	do
-# 		fitsheader -k CRVAL3 $im |  grep -i CRVAL3 >> frequencies.txt;
-# 	done;
+#Replacing all begins of strings here with ../
+sed -i 's/^/\.\.\//g' selected-freq-images.txt
 
 
-# echo -e "\n############################################################"
-# echo "Cleanup freqs file by replacing CRVAL3 = and all spaces after it with emptiness";
-# echo -e "############################################################\n"
-# sed -i "s/CRVAL3  =\ \+//g" frequencies.txt
+echo -e "\n############################################################"
+echo "write out the selected freqs into a single file for easier work. This is for use in the RM synth for wavelength":
+echo -e "############################################################\n"
+for im in *-[0-9][0-9][0-9][0-9]*-I-image.fits;
+	do
+		fitsheader -k CRVAL3 $im |  grep -i CRVAL3 >> frequencies.txt;
+	done;
 
 
-# echo -e "\n############################################################"
-# echo "Selections steps"
-# echo -e "############################################################\n"
-# for s in $stokes;
-# 	do
-# 		echo "Make the selection cubes: ${s^^}";
-# 		fitstool.py --stack=$sel_cubes/${s,,}-sel-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
+echo -e "\n############################################################"
+echo "Cleanup freqs file by replacing CRVAL3 = and all spaces after it with emptiness";
+echo -e "############################################################\n"
+sed -i "s/CRVAL3  =\ \+//g" frequencies.txt
+
+
+echo -e "\n############################################################"
+echo "Selections steps"
+echo -e "############################################################\n"
+for s in $stokes;
+	do
+		echo "Make the selection cubes: ${s^^}";
+		fitstool.py --stack=$sel_cubes/${s,,}-sel-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
 		
-# 		echo "Convolve the cubes to the same resolution";
-# 		spimple-imconv -image $sel_cubes/${s,,}-sel-cube.fits -o $conv_cubes/${s,,}-conv ;
+		echo "Convolve the cubes to the same resolution";
+		spimple-imconv -image $sel_cubes/${s,,}-sel-cube.fits -o $conv_cubes/${s,,}-conv ;
 
-# 		echo "Renamin output file from spimple because the naming here is weird";
-# 		mv $conv_cubes/${s,,}-conv.convolved.fits $conv_cubes/${s,,}-conv.fits
+		echo "Renamin output file from spimple because the naming here is weird";
+		mv $conv_cubes/${s,,}-conv.convolved.fits $conv_cubes/${s,,}-conv.fits
 
-# 		echo "Just check if the beam sizes are the same";
-# 		python plotting_bmaj_bmin.py -c $conv_cubes/${s,,}-conv.fits -o $plots/conv-bmaj-bmin-$s;
-# 	done
+		echo "Just check if the beam sizes are the same";
+		python plotting_bmaj_bmin.py -c $conv_cubes/${s,,}-conv.fits -o $plots/conv-bmaj-bmin-$s;
+	done
 
 
-# echo -e "\n############################################################"
-# echo "Delete the copied image files";
-# echo -e "############################################################\n"
-# rm *-[0-9][0-9][0-9][0-9]-*image.fits
+echo -e "\n############################################################"
+echo "Delete the copied image files";
+echo -e "############################################################\n"
+rm *-[0-9][0-9][0-9][0-9]-*image.fits
 
 
 
@@ -173,22 +171,22 @@ fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g" >> wsums.txt
 
 
 echo -e "\n############################################################"
-echo "Normalize the wsums by the largest values";
-echo -e "############################################################\n" 
-
-# Doing this with a quick python script because, wll I can :) and store in this variable
-
-wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 2); print(*wsums)")
-
-
-
-echo -e "\n############################################################"
 echo "stack I residuals and models";
 echo -e "############################################################\n"
 
-fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "../*residual.fits"
-fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "../*model.fits"
+fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits"
+fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits"
 
+
+echo -e "\n############################################################"
+echo "Convolve even these to the same beams residuals and models";
+echo -e "############################################################\n"
+
+fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits";
+fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits";
+# spimple-imconv -image $sel_cubes/i-residuals.fits -o $conv_cubes/i-residuals-conv;
+# spimple-imconv -image $sel_cubes/i-models.fits -o $conv_cubes/i-models-conv;
+rename.ul -- ".convolved.fits" ".fits" $conv_cubes/*;
 
 
 echo -e "\n############################################################"
@@ -202,5 +200,10 @@ echo -e "\n############################################################"
 echo "Do the SPI fitting";
 echo -e "############################################################\n" 
 
+echo "Normalize the wsums by the largest values";
+
+# # Doing this with a quick python script because, wll I can :) and store in this variable
+wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 2); print(*wsums)")
+
 # cw - channel weights, th-rms threshold factor, acr - add conv residuals, bm -  beam model
-spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $prods/alpha-spimap -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l
+spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l
