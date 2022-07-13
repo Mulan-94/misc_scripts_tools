@@ -125,13 +125,13 @@ echo -e "############################################################\n"
 #what to name the stuff
 data_suffix="circle-t0.05";
 
-python qu_pol/scrap.py -rs 10 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
+# python qu_pol/scrap.py -rs 10 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
 
 
-echo -e "\n############################################################"
-echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
-echo -e "############################################################\n"
-python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
+# echo -e "\n############################################################"
+# echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
+# echo -e "############################################################\n"
+# python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
 
 
 echo -e "\n############################################################"
@@ -146,3 +146,61 @@ echo "Using my mask here, Don't know where yours is but if this step fails, chec
 echo -e "############################################################\n"
 python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt 
 
+
+
+# Doing some SPI maps
+
+echo -e "\n############################################################"
+echo "Copy I selected models and residuals";
+echo -e "############################################################\n" 
+
+# For selection with LS using or patterns
+# https://unix.stackexchange.com/questions/50220/using-or-patterns-in-shell-wildcards
+
+# copy I residuals and models of the selected channels
+cp ../*-00{03,04,10,11,12,13,14,15,16,17,18,19,20,42,43,44,45,46,47,48,49,50,51,52,53,54,55,60,72,73,74}-I-{residual,model}.fits .
+
+
+echo -e "\n############################################################"
+echo "Get their wsums and store";
+echo -e "############################################################\n" 
+
+# Get wsums for the selected images with commas
+# echo $(fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g") | sed "s/ /,/g"
+
+fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g" >> wsums.txt
+
+
+
+echo -e "\n############################################################"
+echo "Normalize the wsums by the largest values";
+echo -e "############################################################\n" 
+
+# Doing this with a quick python script because, wll I can :) and store in this variable
+
+wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 2); print(*wsums)")
+
+
+
+echo -e "\n############################################################"
+echo "stack I residuals and models";
+echo -e "############################################################\n"
+
+fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "../*residual.fits"
+fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "../*model.fits"
+
+
+
+echo -e "\n############################################################"
+echo "Delete the copied models and residuals";
+echo -e "############################################################\n" 
+rm *model.fits *residual.fits
+
+
+
+echo -e "\n############################################################"
+echo "Do the SPI fitting";
+echo -e "############################################################\n" 
+
+# cw - channel weights, th-rms threshold factor, acr - add conv residuals, bm -  beam model
+spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $prods/alpha-spimap -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l
