@@ -95,7 +95,7 @@ class IOUtils:
         # Get mean flux over the pixels
         intense_cut = FitsManip.get_data_cut(reg, data)
 
-        if np.std(intense_cut) > threshold*image_noise:
+        if np.ma.std(intense_cut) > threshold*image_noise:
             return True
         else:
             return False
@@ -273,7 +273,7 @@ class IOUtils:
         logging.info("Also writting default noise region")
         with open(os.path.join(os.path.dirname(reg_fname), "noise_area.reg"), "w") as fil:
             fil.writelines(
-                [p+"\n" for p in header+["box(80.042034, -45.713596, 35.1800\", 29.5500\", 0)"]])
+                [p+"\n" for p in header+["circle(80.041875, -45.713452, 13.0000\")"]])
             logging.info("Noise region written")
             
         return reg_fname
@@ -760,14 +760,18 @@ class FitsManip:
         """
         Returns a data array containing only data from specified region
 
+        get the weighted cut
+        # see: https://astropy-regions.readthedocs.io/en/stable/masks.html?highlight=cutout#making-image-cutouts-and-multiplying-the-region-mask
+
         reg: :obj:`regions.Region`
             Region of interest
         data: :obj:`np.ndarray`
             Data array of a given fits file
         """
         reg_mask = reg.to_mask()
-        data_cut = reg_mask.cutout(data)
-        return data_cut
+        weighted_data_cut = reg_mask.multiply(data)
+        weighted_data_cut = np.ma.masked_equal(weighted_data_cut,0)
+        return weighted_data_cut
 
     @classmethod
     def get_image_stats2(cls, file_core, images, regs, global_noise, noise_reg,
@@ -958,7 +962,9 @@ if __name__ == "__main__":
                     wcs_ref=opts.wcs_ref,
                     factor=factor, overwrite=opts.noverwrite)
                 # because not user specified, I can edit however I want
-                IOUtils.write_valid_regions(reg_file, images[0],
+                # will use the wcs ref as where to determin noise
+                # this must be the I-MFS image
+                IOUtils.write_valid_regions(reg_file, opts.wcs_ref,
                     threshold=opts.r_thresh, overwrite=opts.noverwrite)
 
             # generate region files only so end the loop. On to the next one

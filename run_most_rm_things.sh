@@ -33,19 +33,25 @@ echo "Setting up variables, and the selection of channels";
 stokes="I Q U V";
 sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" "44" "45" "46" "47" "48" "49" "50" "51" "52" "53" "54" "55" "60" "72" "73" "74");
 
-export orig_cubes="intermediates/original-cubes";
-export sel_cubes="intermediates/selection-cubes";
-export conv_cubes="intermediates/conv-selection-cubes";
-export plots="intermediates/beam-plots";
-export prods="products";
-export spis="products/spi-fitting";
 
-mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
+function export_variables {
+	export orig_cubes="intermediates/original-cubes";
+	export sel_cubes="intermediates/selection-cubes";
+	export conv_cubes="intermediates/conv-selection-cubes";
+	export plots="intermediates/beam-plots";
+	export prods="products";
+	export spis="products/spi-fitting";
+	export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
 
-echo -e "\n############################################################"
-echo "Make these directories";
-echo -e "############################################################\n"
-mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
+	echo -e "\n############################################################"
+	echo "Make these directories";
+	echo -e "############################################################\n"
+	mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
+
+	return 0;
+}
+
+export_variables()
 
 for s in $stokes;
 	do
@@ -64,6 +70,12 @@ for n in ${sel[@]};
 	do
 		cp ../*-[0-9][0-9]$n-*-*image* .;
 	done
+
+
+echo -e "\n############################################################"
+echo "copy I MFS image reference image here";
+echo -e "############################################################\n"
+cp ../*MFS-I-image.fits i-mfs.fits
 
 
 echo -e "\n############################################################"
@@ -96,17 +108,17 @@ echo -e "############################################################\n"
 for s in $stokes;
 	do
 		echo "Make the selection cubes: ${s^^}";
-		fitstool.py --stack=$sel_cubes/${s,,}-sel-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
+		fitstool.py --stack=$sel_cubes/${s,,}-image-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
 		
 		echo "Convolve the cubes to the same resolution";
-		spimple-imconv -image $sel_cubes/${s,,}-sel-cube.fits -o $conv_cubes/${s,,}-conv ;
-
-		echo "Renamin output file from spimple because the naming here is weird";
-		mv $conv_cubes/${s,,}-conv.convolved.fits $conv_cubes/${s,,}-conv.fits
-
-		echo "Just check if the beam sizes are the same";
-		python plotting_bmaj_bmin.py -c $conv_cubes/${s,,}-conv.fits -o $plots/conv-bmaj-bmin-$s;
+		spimple-imconv -image $sel_cubes/${s,,}-image-cube.fits -o $conv_cubes/${s,,}-conv-image-cube ;
 	done
+
+echo "Renamin output file from spimple because the naming here is weird";
+rename.ul -- ".convolved.fits" ".fits" $conv_cubes/*;
+
+echo "Just check if the beam sizes are the same";
+python plotting_bmaj_bmin.py -c $conv_cubes/*-conv-image-cube* -o $plots/conv-bmamin;
 
 
 echo -e "\n############################################################"
@@ -123,13 +135,13 @@ echo -e "############################################################\n"
 #what to name the stuff
 data_suffix="circle-t0.05";
 
-# python qu_pol/scrap.py -rs 10 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref $orig_cubes/i-cube.fits;
+python qu_pol/scrap.py -rs 5 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits;
 
 
-# echo -e "\n############################################################"
-# echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
-# echo -e "############################################################\n"
-# python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
+echo -e "\n############################################################"
+echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
+echo -e "############################################################\n"
+python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
 
 
 echo -e "\n############################################################"
@@ -184,8 +196,6 @@ echo -e "############################################################\n"
 
 fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits";
 fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits";
-# spimple-imconv -image $sel_cubes/i-residuals.fits -o $conv_cubes/i-residuals-conv;
-# spimple-imconv -image $sel_cubes/i-models.fits -o $conv_cubes/i-models-conv;
 rename.ul -- ".convolved.fits" ".fits" $conv_cubes/*;
 
 
@@ -207,3 +217,11 @@ wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = 
 
 # cw - channel weights, th-rms threshold factor, acr - add conv residuals, bm -  beam model
 spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l
+
+
+
+echo -e "\n############################################################"
+echo "Make some other plots for paper";
+echo -e "############################################################\n" 
+
+python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots

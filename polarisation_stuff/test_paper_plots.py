@@ -1,4 +1,5 @@
 import numpy as np
+import argparse
 import matplotlib.pyplot as plt
 
 from astropy.io import fits
@@ -33,10 +34,12 @@ def plot_polarised_intensity(data=None, im_name=None, mask_name=None, oup=None):
             data = rfu.read_image_cube(im_name, mask=False)["data"]
         else:
             data = rfu.get_masked_data(im_name, mask)
-    fig, ax = plt.subplots(ncols=6, nrows=5, sharex=True, sharey=True,
+    
+    chans = data.shape[0]
+    fig, ax = plt.subplots(ncols=6, nrows=int(np.ceil(chans/6)), sharex=True, sharey=True,
                            gridspec_kw={"wspace":0 , "hspace":0})
     ax = ax.flatten()
-    chans = data.shape[0]
+    
     for chan in range(chans):
         lpol = np.abs(data[chan])
         ax[chan].imshow(lpol, cmap="coolwarm", origin="lower")
@@ -65,10 +68,12 @@ def plot_fractional_polzn(data=None, im_name=None, mask_name=None, oup=None):
         else:
             data = rfu.get_masked_data(im_name, mask)
 
-    fig, ax = plt.subplots(ncols=6, nrows=5, sharex=True, sharey=True,
+    chans = data.shape[0]
+    fig, ax = plt.subplots(ncols=6, nrows=int(np.ceil(chans/6)), sharex=True, sharey=True,
                             gridspec_kw={"wspace":0 , "hspace":0})
     ax = ax.flatten()
-    chans = data.shape[0]
+    
+    
     for chan in range(chans):
         fpol = np.abs(data[chan])
         ax[chan].imshow(np.log(fpol), origin="lower", cmap="coolwarm")
@@ -143,6 +148,7 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
     fpol_data = fpol_data[slicex, slicey]
 
     # nornalize this
+    
     fpol_data = np.ma.masked_greater(fpol_data, 1)
     scales = fpol_data / fpol_data.max()
     u = np.cos(pangle_data) * scales
@@ -163,6 +169,7 @@ def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name, oup=None):
     ax = add_contours(ax, i_data)
     ax = add_magnetic_vectors(ax, fpol_data, pa_data)
     fig.tight_layout()
+    print(f"Output is at: {oup}")
     fig.savefig(oup+"-intense_mfield.svg")
     # plt.show()
 
@@ -213,6 +220,7 @@ def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=
     plt.subplots_adjust(wspace=.5, hspace=0)
 
     fig.tight_layout()
+    print(f"Output is at: {oup}")
     fig.savefig(oup+"-lobes_rm.svg")
     # plt.show()
 
@@ -232,7 +240,6 @@ def make_masks_from_ricks_data():
     for fname in fnames:
         rfu.make_mask(fname, xy_dims=(572,572))
 
-    set_trace()
 
     fig, ax = plt.subplots(figsize=(10,5), sharex=True, sharey=True, ncols=2, gridspec_kw={"wspace": 0 })
     ax[0].imshow(mask, origin="lower")
@@ -244,58 +251,84 @@ def make_masks_from_ricks_data():
     # plt.show()
 
 
+def parser():
+    ps = argparse.ArgumentParser(
+        usage="%(prog)s [options]",
+        description="Script to genernetae some plots for my paper")
+    ps.add_argument("-rim", "--ref-i-image", dest="ref_image", 
+        help="Reference I image for the contour plots")
+    ps.add_argument("--cube-name", dest="cube_names", nargs="+",
+        help="Input I q AND U same resolution cubes")
+    ps.add_argument("--input-maps", dest="prefix", 
+        required=True,
+        help="Input prefix for the fpol rm and whatever maps")
+    ps.add_argument("--mask-name", dest="mask_name",
+        help="Name of the full field mask to use"
+        )
+    ps.add_argument("-elm", "--e-lobe-mask", dest="elobe_mask",
+        help="Mask for the eastern lobe"
+        )
+    ps.add_argument("-wlm", "--w-lobe-mask", dest="wlobe_mask",
+        help="Mask for the western lobe"
+        )
+    ps.add_argument("-o", "-output-dir", dest="output_dir",
+        help="Where to dump the outputs"
+        )
+    return ps
 
 ######################################################################################
 # Main
 ######################################################################################
 
-# prefix = "turbo"
-# prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-NHS-data-mask"
-# prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-ricks-data-mask"
-prefix = "/home/andati/pica/reduction/testing_spectra/from_rick/outputs/with-NHS-data-mask"
-postfix = {
-    "amp" : f'{prefix}-p0-peak-rm.fits',
-    "angle" : f'{prefix}-PA-pangle-at-peak-rm.fits',
-    "fpol" : f'{prefix}-FPOL-at-center-freq.fits',
-    "rm" : f'{prefix}-RM-depth-at-peak-rm.fits'
-}
-
-images = [postfix[_] for _ in "amp angle rm".split()]
+if __name__ == "__main__":
+    
+    opts = parser().parse_args()
 
 
-cubes = glob("*-cubes*.fits")
-stokes = {}
-for cube in cubes:
-    stoke = cube.split("-")[0].lower()
-    stokes[stoke] = rfu.read_image_cube(cube)["data"]
+    postfix = {
+        "amp" : f'{opts.prefix}-p0-peak-rm.fits',
+        "angle" : f'{opts.prefix}-PA-pangle-at-peak-rm.fits',
+        "fpol" : f'{opts.prefix}-FPOL-at-center-freq.fits',
+        "rm" : f'{opts.prefix}-RM-depth-at-peak-rm.fits'
+    }
+
+    images = [postfix[_] for _ in "amp angle rm".split()]
+
+    stokes = {}
+    for cube in opts.cube_names:
+        stoke = os.path.basename(cube)[0]
+        stokes[stoke] = rfu.read_image_cube(cube)["data"]
+
+    stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
+    stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
+
+    pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
+
+    pangle_image = postfix["angle"]
+    pangle_data = rfu.read_image_cube(pangle_image)["data"]
+
+    fpol_image = postfix["fpol"]
 
 
-stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
-stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
+    # plot lobes and their dispersion
+    plot_rm_for_lobes(
+        rot_meas_image=postfix["rm"],
+        e_mask=opts.elobe_mask, w_mask=opts.wlobe_mask,
+        vmin=-100, vmax=100, oup=opts.prefix)
 
 
-pica_i_image = "I-MFS.fits"
-# pica_image = "I-hs-MFS.fits"
-pica_mask = "masks/nhs-mask-572.fits"
+    # plot fpol
+    plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix)
+    plot_polarised_intensity(stokes["l_pol"], oup=opts.prefix)
 
-pica_i_data = rfu.get_masked_data(pica_i_image, pica_mask)
-
-pangle_image = postfix["angle"]
-pangle_data = rfu.read_image_cube(pangle_image)["data"]
-
-fpol_image = postfix["fpol"]
+    plot_intensity_vectors(
+        opts.ref_image, fpol_image, pangle_image,
+        opts.mask_name, oup=opts.prefix)
 
 
-# plot lobes and their dispersion
-plot_rm_for_lobes(
-    rot_meas_image=postfix["rm"],
-    e_mask="masks/east-lobe-572-NHS.fits", w_mask="masks/west-lobe-572-NHS.fits",
-    vmin=-100, vmax=100, oup=prefix)
-
-
-# plot fpol
-# plot_fractional_polzn(stokes["f_pol"], oup=prefix)
-# plot_polarised_intensity(stokes["l_pol"], oup=prefix)
-
-plot_intensity_vectors(pica_i_image, fpol_image, pangle_image, pica_mask, oup=prefix)
+    """
+    Running this script with
+    
+    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prod/some-plots
+    """
 
