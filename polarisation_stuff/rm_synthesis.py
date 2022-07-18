@@ -18,6 +18,7 @@ from scrap import IOUtils
 
 from ipdb import set_trace
 
+matplotlib.use('Agg') 
 plt.style.use("seaborn")
 
 

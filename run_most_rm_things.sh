@@ -227,3 +227,8 @@ echo "Make some other plots for paper";
 echo -e "############################################################\n" 
 
 python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
+
+
+echo -e "\n############################################################"
+echo "                    Done                     "
+echo -e "**************************************************************"
