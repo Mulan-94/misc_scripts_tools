@@ -162,7 +162,6 @@ def parser():
 
 if __name__ == "__main__":
     ps = parser().parse_args()
-
     if ps.cubes is not None:
         for cube in ps.cubes:
             single_cube_file(cube_name=cube, oname=ps.output, channels=ps.channels)

@@ -34,24 +34,20 @@ stokes="I Q U V";
 sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" "44" "45" "46" "47" "48" "49" "50" "51" "52" "53" "54" "55" "60" "72" "73" "74");
 
 
-function export_variables {
-	export orig_cubes="intermediates/original-cubes";
-	export sel_cubes="intermediates/selection-cubes";
-	export conv_cubes="intermediates/conv-selection-cubes";
-	export plots="intermediates/beam-plots";
-	export prods="products";
-	export spis="products/spi-fitting";
-	export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
+export orig_cubes="intermediates/original-cubes";
+export sel_cubes="intermediates/selection-cubes";
+export conv_cubes="intermediates/conv-selection-cubes";
+export plots="intermediates/beam-plots";
+export prods="products";
+export spis="products/spi-fitting";
+export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
 
-	echo -e "\n############################################################"
-	echo "Make these directories";
-	echo -e "############################################################\n"
-	mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
+echo -e "\n############################################################"
+echo "Make these directories";
+echo -e "############################################################\n"
+mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
 
-	return 0;
-}
 
-export_variables()
 
 for s in $stokes;
 	do
@@ -114,11 +110,11 @@ for s in $stokes;
 		spimple-imconv -image $sel_cubes/${s,,}-image-cube.fits -o $conv_cubes/${s,,}-conv-image-cube ;
 	done
 
-echo "Renamin output file from spimple because the naming here is weird";
-rename.ul -- ".convolved.fits" ".fits" $conv_cubes/*;
+echo "Renaming output file from spimple because the naming here is weird";
+rename.ul -- ".convolved.fits" ".fits" $conv_cubes/* ;
 
 echo "Just check if the beam sizes are the same";
-python plotting_bmaj_bmin.py -c $conv_cubes/*-conv-image-cube* -o $plots/conv-bmamin;
+python plotting_bmaj_bmin.py -c $conv_cubes/*-conv-image-cube.fits -o $plots/conv-bmamin;
 
 
 echo -e "\n############################################################"
@@ -135,7 +131,9 @@ echo -e "############################################################\n"
 #what to name the stuff
 data_suffix="circle-t0.05";
 
-python qu_pol/scrap.py -rs 5 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits;
+# Appropriate 20-best, 18-better, 16-more-data
+python qu_pol/scrap.py -rs 5 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits --regions-threshold 16
+
 
 
 echo -e "\n############################################################"
@@ -154,7 +152,7 @@ echo -e "\n############################################################"
 echo "Do some RM maps, fpol maps and other maps";
 echo "Using my mask here, Don't know where yours is but if this step fails, check on that";
 echo -e "############################################################\n"
-python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv.fits -u $conv_cubes/u-conv.fits -i $conv_cubes/i-conv.fits -ncore 120 -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt 
+python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv-image-cube.fits -u $conv_cubes/u-conv-image-cube.fits -i $conv_cubes/i-conv-image-cube.fits -ncore 120 -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt 
 
 
 
@@ -196,13 +194,17 @@ echo -e "############################################################\n"
 
 fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits";
 fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits";
-rename.ul -- ".convolved.fits" ".fits" $conv_cubes/*;
+
+echo "Rename the convolved images";
+# Adding || tru so that the error here does not fail the entire program
+# see: https://stackoverflow.com/questions/11231937/bash-ignoring-error-for-a-particular-command
+rename.ul -- ".convolved.fits" ".fits" $conv_cubes/* || true;
 
 
 echo -e "\n############################################################"
 echo "Delete the copied models and residuals";
 echo -e "############################################################\n" 
-rm *model.fits *residual.fits
+rm *-model.fits *-residual.fits ;
 
 
 

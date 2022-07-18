@@ -95,7 +95,7 @@ class IOUtils:
         # Get mean flux over the pixels
         intense_cut = FitsManip.get_data_cut(reg, data)
 
-        if np.ma.std(intense_cut) > threshold*image_noise:
+        if np.nanstd(intense_cut) > threshold*image_noise:
             return True
         else:
             return False
@@ -142,7 +142,7 @@ class IOUtils:
                 nlines = []
                 for i, c in enumerate(chosen, 1):
                     if "los" not in lines[c+3]:
-                        new = lines[c+3].replace("\n", f" # {i},los text={{reg_{i}}}\n")
+                        new = lines[c+3].split("#")[0] + f" # {i},los text={{reg_{i}}}\n"
                         nlines.append(new)
                     else:
                         nlines.append(lines[c+3])
@@ -685,7 +685,8 @@ class FitsManip:
                 data = im_data["data"]
             # Get image noise from standard deviation of a sourceless region
             noise_cut = cls.get_data_cut(noise_reg, data)
-            noise = np.nanstd(noise_cut)
+            # noise = np.nanstd(noise_cut)
+            noise = MathUtils.rms(noise_cut)
         return noise
 
 
@@ -719,7 +720,8 @@ class FitsManip:
             # im_data["flux_jybm"] = im_data["flux_jy"] = None
             im_data["flux_jybm"] = im_data["noise"] = im_data["image_noise"] = None
             return im_data
-
+        
+        #Using the center pixel
         cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
         flux_jybm = intense_cut[cpixx, cpixy]
 
@@ -836,7 +838,7 @@ def parser():
         \r===================================================================+
         \rExamples                                                           |                 
         \r========                                                           |                                
-        \r\nplotting only                                                    |                                           
+        \r\nplotting only                                                                 |                                        
         \r    python scrap.py -p 50 20 -t mzima-t10 -plp -piqu --plot-grid   |
         \r\nstats and plotting                                               |                                             
         \r    python scrap.py -f clean-small.txt -rs 50 20 -ap \             |
@@ -848,69 +850,88 @@ def parser():
         \r===================================================================+
         """
     )
-    parsing = argparse.ArgumentParser(usage="%(prog)s [options]",
+    parsing = argparse.ArgumentParser(usage="%(prog)s [options]", add_help=True,
         description="Generate Faraday spectra for various LoS from image cubes")
-    parsing.add_argument("-f", "--infile", dest="in_list", type=str,
+
+    req_parsing = parsing.add_argument_group("Required Arguments")
+
+    req_parsing.add_argument("-f", "--infile", dest="in_list", type=str,
         metavar="", required=True,
         help="File containing an organised list of the input image names."+
         "Can easily be done with 'ls *-image.fits > whatever.txt'")
-    parsing.add_argument("-rf", "--region-file", dest="reg_file", type=str,
+    req_parsing.add_argument("-wcs-ref", "--wcs-reference", dest="wcs_ref",
+        metavar="", default=None, required=True,
+        help=("The image to use to get the reference WCS for region file " +
+            "genenration. Not required if only plotting."))
+    
+
+    # Optional arguments
+    opt_parsing = parsing.add_argument_group("Optional Arguments")
+
+    opt_parsing.add_argument("--noverwrite", dest="noverwrite", action="store_false",
+        help="Do not ovewrite everything along the way")
+    opt_parsing.add_argument("-ro", "--regions-only", dest="r_only",
+        action="store_true", help="Generate only region files with this script.")
+    opt_parsing.add_argument("-rf", "--region-file", dest="reg_file", type=str,
         default=None, metavar="", 
-        help="An input region file. Otherwise, one will be generated.")
-    parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
+        help="An input region file. Otherwise, one will be auto-generated.")
+    
+    opt_parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
         type=int, default=[], metavar="", 
-        help="Create regions of this pixel size and perform analyses on them")
-    parsing.add_argument("-rt", "--regions-threshold", dest="r_thresh",
+        help=("Create regions of this circle radius and perform analyses on them."+
+        " If you want to set the data threshold, please use --threshold."))
+    opt_parsing.add_argument("-rt", "--regions-threshold", dest="r_thresh",
         metavar="", type=int, default=10,
         help="Threshold for regions in which to make masks. Default is 5")
-    parsing.add_argument("-ro", "--regions-only", dest="r_only",
-        action="store_true", help="Generate only region files")
-    parsing.add_argument("-wcs-ref", "--wcs-reference", dest="wcs_ref",
-        metavar="", default=None,
-        help="The image to use to get the reference WCS")
-    parsing.add_argument("--output-dir", dest="output_dir", type=str,
-        default="scrap-outputs",
-        help="where to dump output")
-
-
-    parsing.add_argument("-t", "--testing", dest="testing", metavar="", type=str,
-        help="Testing prefix. Will be Prepended with '-'", default=None)
-
-    parsing.add_argument("--threshold", dest="thresh", metavar="", type=float,
+    opt_parsing.add_argument("--threshold", dest="thresh", metavar="", type=float,
         default=10,
-        help="Noise factor threshold above which to extract. This will be threshold * noise_sigma")
-    parsing.add_argument("--noise", dest="noise", metavar="", type=float,
+        help=("Noise factor threshold above which to extract."+
+            " This will be threshold * noise_sigma. Use in conjuction with" + 
+            " --regions-threshold if you want to put a threshold on where the" +
+            " regions are placed."))
+    opt_parsing.add_argument("-o", "--output-dir", dest="output_dir", type=str,
+        default="scrap-outputs", metavar="",
+        help="where to dump output")
+    opt_parsing.add_argument("-t", "--testing", dest="testing", metavar="",
+        type=str, default=None,
+        help="Testing affixation. Will be Prepended with '-'. Default name is IQU something")
+    opt_parsing.add_argument("--noise", dest="noise", metavar="", type=float,
         default=None,
-        help="Noise value above which to extract. Default is automatic determine.")
-    parsing.add_argument("--noverwrite", dest="noverwrite", action="store_false",
-        help="Do not ovewrite everything along the way")
-
+        help="Noise value above which to extract. Default is automatically determined.")
+    
     
     #plotting arguments
-    parsing.add_argument("--plot-grid", dest="plot_grid", action="store_true",
+    plot_parsing = parsing.add_argument_group("Plotting Arguments")
+    plot_parsing.add_argument("--plot-grid", dest="plot_grid",
+        action="store_true",
         help="Enable to make gridded plots")
-    parsing.add_argument("-ap", "--auto-plot", dest="auto_plot", action="store_true",
+    plot_parsing.add_argument("-ap", "--auto-plot", dest="auto_plot",
+        action="store_true",
         help="Plot all the specified region pixels")
-    parsing.add_argument("-piqu", "--plot-iqu", dest="plot_qu", action="store_true",
+    plot_parsing.add_argument("-piqu", "--plot-iqu", dest="plot_qu",
+        action="store_true",
         help="Plot Q and U values")
-    parsing.add_argument("-pfp", "--plot-frac-pol", dest="plot_frac_pol", action="store_true",
+    plot_parsing.add_argument("-pfp", "--plot-frac-pol", dest="plot_frac_pol",
+        action="store_true",
         help="Plot Fractional polarization")
-    parsing.add_argument("-plp", "--plot-linear-pol", dest="plot_linear_pol", action="store_true",
+    plot_parsing.add_argument("-plp", "--plot-linear-pol",
+        dest="plot_linear_pol", action="store_true",
         help="Plot linear polarization power")
-    parsing.add_argument("--ymax", dest="ymax", type=float, 
+    plot_parsing.add_argument("--ymax", dest="ymax", type=float, 
         help="Y axis max limit")
-    parsing.add_argument("--ymin", dest="ymin", type=float,
+    plot_parsing.add_argument("--ymin", dest="ymin", type=float,
         help="Y axis min limit")
-    parsing.add_argument("--xmax", dest="xmax", type=float, 
+    plot_parsing.add_argument("--xmax", dest="xmax", type=float, 
         help="Y axis max limit")
-    parsing.add_argument("--xmin", dest="xmin", type=float,
+    plot_parsing.add_argument("--xmin", dest="xmin", type=float,
         help="Y axis min limit")
-    parsing.add_argument("-p", "--plot", dest="plot", nargs="*", type=int, 
-        metavar="",
+    plot_parsing.add_argument("-p", "--plot", dest="plot", nargs="*",
+        type=int, metavar="",
         help="Make plots for these region sizes manually. These will be linearly scaled")
-    parsing.add_argument("-ps", "--plot-scales", dest="plot_scales", metavar="",
+    plot_parsing.add_argument("-ps", "--plot-scales", dest="plot_scales", metavar="",
         default=["linear"], nargs="*", choices=["linear", "log"],
-        help="Scales for the plots. Can be a space separated list of different scales.")
+        help=("Scales for the plots. Can be a space separated list of " + 
+            "different scales. Options are linear or log."))
 
     return parsing
 
@@ -987,11 +1008,13 @@ if __name__ == "__main__":
                 logging.info(f"Getting noise from {images[0]}")
                 global_noise = FitsManip.get_noise(noise_reg, images[0], data=None)
             
-            logging.info(f"Noise is       : {global_noise}")
-            logging.info(f"Sigma threshold: {opts.thresh}")
-            logging.info(f"Noise threshold: {opts.thresh * global_noise}")
+            logging.info(f"Noise is        : {global_noise}")
+            logging.info(f"Noise factor    : {opts.thresh}")
+            logging.info(f"Noise threshold : {opts.thresh * global_noise}")
             
-            bn = FitsManip.get_image_stats2(file_core, images, regs, global_noise, noise_reg, sig_factor=opts.thresh, output_dir=opts.output_dir)
+            bn = FitsManip.get_image_stats2(
+                file_core, images, regs, global_noise, noise_reg,
+                sig_factor=opts.thresh, output_dir=opts.output_dir)
 
             if opts.auto_plot:
                 logging.info("Autoplotting is enabled")
