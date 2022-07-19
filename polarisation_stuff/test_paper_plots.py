@@ -1,6 +1,7 @@
 import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+import warnings
 
 from astropy.io import fits
 from astropy.wcs import WCS
@@ -14,10 +15,31 @@ sys.path.append(f"{os.environ['HOME']}/git_repos/misc_scripts_n_tools/fits_relat
 import random_fits_utils as rfu
 from ipdb import set_trace
 
+
+warnings.filterwarnings("ignore", module="astropy")
+
+FIGSIZE = (16,9)
+EXT = ".svg"
+
+def set_image_projection(image_obj):
+    """
+    image_obj:
+        Matplotlib axis object from image e.g ax from
+        fig, ax = plt.subplots(subplots_kw={"projection": wcs})
+    """
+    image_obj.get_transform('fk5')
+    ra, dec = image_obj.coords
+    ra.set_major_formatter('hh:mm:ss')
+    dec.set_major_formatter('dd:mm:ss')
+    image_obj.set_xlabel('J2000 Right Ascension')
+    image_obj.set_ylabel('J2000 Declination')
+    return image_obj
+
+
 ######################################################################################
 ## Plot polarised intensity for each channel
 
-def plot_polarised_intensity(data=None, im_name=None, mask_name=None, oup=None):
+def plot_polarised_intensity(data=None, im_name=None, mask=None, oup=None, ref_image=None):
     """
     Input
     -----
@@ -29,58 +51,132 @@ def plot_polarised_intensity(data=None, im_name=None, mask_name=None, oup=None):
     mask_name
         Name of mask to be applied
     """
-    if data is None:
-        if mask is None:
-            data = rfu.read_image_cube(im_name, mask=False)["data"]
-        else:
-            data = rfu.get_masked_data(im_name, mask)
+
+    # if strings read the image, otherwise assume data is in numpy array
+    if isinstance(data, str):
+        data = rfu.read_image_cube(data, mask=False)["data"]
+    if mask is not None and isinstance(mask, str):
+        mask = rfu.read_image_cube(mask)["data"]
     
     chans = data.shape[0]
-    fig, ax = plt.subplots(ncols=6, nrows=int(np.ceil(chans/6)), sharex=True, sharey=True,
-                           gridspec_kw={"wspace":0 , "hspace":0})
+    mid_chan = int(np.median(np.arange(chans)))
+    data = np.abs(data)
+
+    ydim, xdim = np.where(mask == False)
+    wiggle = 10
+    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+    wcs = rfu.read_image_cube(ref_image)["wcs"]
+
+    """
+    fig, ax = plt.subplots(
+        figsize=FIGSIZE, ncols=6, nrows=int(np.ceil(chans/6)), sharex=True,
+        sharey=True, gridspec_kw={"wspace":0 , "hspace":0}, subplot_kw={'projection': wcs})
     ax = ax.flatten()
-    
+
     for chan in range(chans):
-        lpol = np.abs(data[chan])
-        ax[chan].imshow(lpol, cmap="coolwarm", origin="lower")
+        lpol = np.ma.masked_array(data=data[chan], mask=mask)
+        image = ax[chan].imshow(lpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+
+    fig.subplots_adjust(right=0.8)
+    # left, bottom, width, height
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.03, 0.7])
+    fig.colorbar(image, cax=cbar_ax)
     fig.tight_layout()
-    fig.savefig(oup+"-lin_pol.svg")
-    # plt.show()
+    """
+
+    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+    lpol = np.ma.masked_array(data=data[mid_chan], mask=mask)
+    image = ax.imshow(lpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.1)
+    
+    ax = set_image_projection(ax)
+    ax.tick_params(axis="x", top=False)
+    ax.tick_params(axis="y", right=False)
+    
+    ax.set_title(f"Polarised Intensity of Middle Channel: "+f"{mid_chan}".zfill(4))
+    plt.xlim(*xlims)
+    plt.ylim(*ylims)
+    fig.colorbar(image, shrink=0.85)
+    fig.tight_layout()
+    oname = oup + f"-lin_pol{EXT}"
+    fig.savefig(oname)
+    print(f"Output is at: {oname}")
+
 
 ######################################################################################
 ## Plot fractional polzn for each channel
 
-def plot_fractional_polzn(data=None, im_name=None, mask_name=None, oup=None):
+def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
     """
     Input
     -----
     data:
-        Numpy array containing image data. If this is specified, the rest of 
-        the args are ignored.
-    im_name
-        Masked polarisation intensity im_name
-    mask_name
-        Name of mask to be applied
+        Numpy array containing image data.  Otherwise, it is the name of
+        the iamge where the data will be gotten from 
+    mask_name  mask data
+        Name of mask to be applied. or amsk. This is amust fro mny own sake
     """
-    if data is None:
-        if mask is None:
-            data = rfu.read_image_cube(im_name, mask=False)["data"]
-        else:
-            data = rfu.get_masked_data(im_name, mask)
-
+   
+    print("Starting frac pol plot")
+   
+    # if strings read the image, otherwise assume data is in numpy array
+    if isinstance(data, str):
+        data = rfu.read_image_cube(data, mask=False)["data"]
+    if mask is not None and isinstance(mask, str):
+        mask = rfu.read_image_cube(mask)["data"]
+    
     chans = data.shape[0]
-    fig, ax = plt.subplots(ncols=6, nrows=int(np.ceil(chans/6)), sharex=True, sharey=True,
-                            gridspec_kw={"wspace":0 , "hspace":0})
+    mid_chan = int(np.median(np.arange(chans)))
+    data = np.abs(data)
+
+    ydim, xdim = np.where(mask == False)
+    wiggle = 10
+    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+    wcs = rfu.read_image_cube(ref_image)["wcs"]
+    
+    """
+    fig, ax = plt.subplots(
+        figsize=FIGSIZE, ncols=6, nrows=int(np.ceil(chans/6)), sharex=True,
+        sharey=True, gridspec_kw={"wspace":0 , "hspace":0})
     ax = ax.flatten()
-    
-    
+
     for chan in range(chans):
-        fpol = np.abs(data[chan])
-        ax[chan].imshow(np.log(fpol), origin="lower", cmap="coolwarm")
+        fpol = np.ma.masked_array(data=data[chan], mask=mask)
+        image = ax[chan].imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+
+    fig.subplots_adjust(right=0.8)
+    # left, bottom, width, height
+    cbar_ax = fig.add_axes([0.85, 0.15, 0.03, 0.7])
+    fig.colorbar(image, cax=cbar_ax)
     fig.tight_layout()
-    #plt.colorbar()
-    fig.savefig(oup+"-fpol.svg")
-    # plt.show()
+    """
+
+    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+    fpol = np.ma.masked_array(data=data[mid_chan], mask=mask)
+    image = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
+    
+    ax = set_image_projection(ax)
+    ax.tick_params(axis="x", top=False)
+    ax.tick_params(axis="y", right=False)
+    
+    ax.set_title(f"Fractional polarisation of Middle Channel: "+f"{mid_chan}".zfill(4))
+    plt.xlim(*xlims)
+    plt.ylim(*ylims)
+    fig.colorbar(image, shrink=0.85)
+    fig.tight_layout()
+    oname = oup + f"-fpol{EXT}"
+    fig.savefig(oname)
+    print(f"Output is at: {oname}")
+
+    return
+    
 
 
 ######################################################################################
@@ -112,12 +208,11 @@ def add_contours(axis, data, levels=None):
 
 
     if levels is None:
-        # setup contour levels
+        # setup contour levels factor of root two between n+1 and n
         lstep = 0.5
-        levels = 2**np.arange(0, data.max()+10, lstep)*0.01
+        # I'm setting the first level at 0.01, because 2**0 is 1
+        levels = 2**np.arange(0, data.max()+10, lstep)*0.001
         levels = np.ma.masked_greater(levels, data.max()).compressed()
-
-    # fig, ax = plt.subplots(figsize=(15,15))
 
     # contour lines
     axis.contour(data, colors="k", linewidths=0.5, origin="lower", levels=levels)
@@ -132,13 +227,12 @@ def add_contours(axis, data, levels=None):
     return axis
     
 
-
 def add_magnetic_vectors(axis, fpol_data, pangle_data):
     """
     vector length: degree of poln (fpol)
     orientation: position angle
     """
-    skip = 10
+    skip = 5
     slicex = slice(None, fpol_data.shape[0], skip)
     slicey = slice(None, fpol_data.shape[-1], skip)
     col, row = np.mgrid[slicex, slicey]
@@ -154,32 +248,50 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
     u = np.cos(pangle_data) * scales
     v = np.sin(pangle_data) * scales
 
+
     # ax.contourf(row, col, Z)
     # plt.axis([2200, 2770, 2050, 2250])
-    qv = axis.quiver(row, col, u, v, angles="xy", pivot='tail', headlength=4, width=0.0008, scale=5, headwidth=0)
+    qv = axis.quiver(
+        row, col, u, v, angles="xy", pivot='tail', headlength=4,
+        width=0.0008, scale=5, headwidth=0)
 
     return axis
 
-def plot_intensity_vectors(i_name, fpol_name, pa_name, mask_name, oup=None):
-    i_data = rfu.get_masked_data(i_name, mask_name)
-    fpol_data = rfu.get_masked_data(fpol_name, mask_name)
-    pa_data = rfu.get_masked_data(pa_name, mask_name)
+
+def plot_intensity_vectors(i_name, fpol_name, pa_name, mask=None, oup=None):
+    i_data = rfu.get_masked_data(i_name, mask)
+    fpol_data = rfu.get_masked_data(fpol_name, mask)
+    pa_data = rfu.get_masked_data(pa_name, mask)
     
-    fig, ax = plt.subplots(figsize=(15,15))
+    mask = i_data.mask
+
+    ydim, xdim = np.where(mask == False)
+    wiggle = 10
+    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+    wcs = rfu.read_image_cube(i_name)["wcs"]
+
+    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+    ax = set_image_projection(ax)
+
     ax = add_contours(ax, i_data)
     ax = add_magnetic_vectors(ax, fpol_data, pa_data)
-    fig.tight_layout()
-    print(f"Output is at: {oup}")
-    fig.savefig(oup+"-intense_mfield.svg")
-    # plt.show()
-
+    ax.tick_params(axis="x", top=False)
+    ax.tick_params(axis="y", right=False)
+    plt.xlim(*xlims)
+    plt.ylim(*ylims)
+    # fig.tight_layout()
+    oname = oup + f"-intense_mfield.png"
+    print(f"Output is at: {oname}")
+    fig.savefig(oname)
 
 
 
 ###################################
 # plot lobes with the histograms left and right
 
-def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=None):
+def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=None, ref_image=None):
     rot_meas = rfu.read_image_cube(rot_meas_image)["data"]
     w_lobe_mask = rfu.read_image_cube(w_mask, mask=True)["data"]
     e_lobe_mask = rfu.read_image_cube(e_mask, mask=True)["data"]
@@ -191,38 +303,51 @@ def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=
     lobes = np.ma.masked_array(rot_meas, mask=lobes_mask)
 
 
-    fig = plt.figure(figsize=(10,5))
-
-    wcs = rfu.read_image_cube(rot_meas_image)["wcs"]
-    image = plt.subplot2grid((2,4), (0,1), rowspan=2, colspan=2, projection=wcs)
-    ca = image.imshow(lobes, origin="lower", cmap="magma", vmin=vmin, vmax=vmax, aspect="equal")
-    plt.colorbar(ca, location="bottom")
-    image.get_transform('fk5')
-    ra, dec = image.coords
-    ra.set_major_formatter('hh:mm:ss')
-    dec.set_major_formatter('dd:mm:ss')
-    image.set_xlabel('J2000 Right Ascension')
-    image.set_ylabel('J2000 Declination')
-
-    # #image.axis("off")
-    # plt.xlim(210, 360)
-    # plt.ylim(230, 330)
+    fig = plt.figure(figsize=FIGSIZE)
     
+    wcs = rfu.read_image_cube(ref_image or rot_meas_image)["wcs"]
+    image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2, projection=wcs)
+    ca = image.imshow(
+        lobes, origin="lower", cmap="magma", vmin=vmin, vmax=vmax, aspect="equal")
+    plt.colorbar(ca, location="right", shrink=0.90, pad=0.01, label="RM", drawedges=False)
 
-    west_hist = plt.subplot2grid((2,4), (0,3), rowspan=2)
-    west_hist.hist(w_lobe.compressed(), bins=20, log=True, orientation="horizontal")
-    #west_hist.axis("off")
+    image = set_image_projection(image)
 
-    east_hist = plt.subplot2grid((2,4), (0,0), rowspan=2)
-    east_hist.hist(e_lobe.compressed(), bins=20, log=True, orientation="horizontal")
-    east_hist.sharey(west_hist)
-    #east_hist.axis("off")
-    plt.subplots_adjust(wspace=.5, hspace=0)
+    # swich of these ticks
+    image.tick_params(axis="x", top=False)
+    image.tick_params(axis="y", right=False)
+    # #image.axis("off")
+
+    # so that I can zoom into the image easily and automatically
+    ydim, xdim = np.where(lobes.mask == False)
+    wiggle = 10
+    plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
+    plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
+
+    west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
+    west_hist.hist(w_lobe.compressed(), bins=20, log=True,
+        orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="blue", 
+        histtype="step")
+    west_hist.yaxis.tick_right()
+
+    west_hist.set_title("Western Lobe (Right Hand) RM Distribution")
+    west_hist.xaxis.set_visible(False)
+
+    east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
+    east_hist.hist(e_lobe.compressed(), bins=20, log=False,
+        orientation="vertical", fill=False, ls="--", lw=1, edgecolor="blue",
+        histtype="step")
+    east_hist.xaxis.tick_top()
+    east_hist.set_title("Eastern Lobe (Left Hand) RM Distribution")
+    east_hist.yaxis.set_visible(False)
+    
+    plt.subplots_adjust(wspace=.01, hspace=0)
 
     fig.tight_layout()
-    print(f"Output is at: {oup}")
-    fig.savefig(oup+"-lobes_rm.svg")
-    # plt.show()
+    oname = oup + f"-lobes_rm{EXT}"
+    fig.savefig(oname)
+    print(f"Output is at: {oname}")
+    
 
 
 def make_masks_from_ricks_data():
@@ -241,7 +366,7 @@ def make_masks_from_ricks_data():
         rfu.make_mask(fname, xy_dims=(572,572))
 
 
-    fig, ax = plt.subplots(figsize=(10,5), sharex=True, sharey=True, ncols=2, gridspec_kw={"wspace": 0 })
+    fig, ax = plt.subplots(figsize=FIGSIZE, sharex=True, sharey=True, ncols=2, gridspec_kw={"wspace": 0 })
     ax[0].imshow(mask, origin="lower")
     ax[0].vlines(280, 0, 571)
     ax[0].hlines(280, 0, 571)
@@ -284,15 +409,19 @@ if __name__ == "__main__":
     
     opts = parser().parse_args()
 
-
-    postfix = {
+    # names for the various rm products
+    map_names = {
         "amp" : f'{opts.prefix}-p0-peak-rm.fits',
         "angle" : f'{opts.prefix}-PA-pangle-at-peak-rm.fits',
         "fpol" : f'{opts.prefix}-FPOL-at-center-freq.fits',
         "rm" : f'{opts.prefix}-RM-depth-at-peak-rm.fits'
     }
 
-    images = [postfix[_] for _ in "amp angle rm".split()]
+    images = [map_names[_] for _ in "amp angle rm".split()]
+    
+    pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
+    pangle_data = rfu.read_image_cube(map_names["angle"])["data"]
+    pica_mask = pica_i_data.mask
 
     stokes = {}
     for cube in opts.cube_names:
@@ -301,34 +430,30 @@ if __name__ == "__main__":
 
     stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
     stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
-
-    pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
-
-    pangle_image = postfix["angle"]
-    pangle_data = rfu.read_image_cube(pangle_image)["data"]
-
-    fpol_image = postfix["fpol"]
-
-
+    
     # plot lobes and their dispersion
     plot_rm_for_lobes(
-        rot_meas_image=postfix["rm"],
+        rot_meas_image=map_names["rm"],
         e_mask=opts.elobe_mask, w_mask=opts.wlobe_mask,
-        vmin=-100, vmax=100, oup=opts.prefix)
+        vmin=-100, vmax=100, oup=opts.prefix, ref_image=opts.ref_image)
 
 
     # plot fpol
-    plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix)
-    plot_polarised_intensity(stokes["l_pol"], oup=opts.prefix)
+    plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix, mask=pica_mask,
+        ref_image=opts.ref_image)
+    
+    plot_polarised_intensity(
+        stokes["l_pol"], oup=opts.prefix, ref_image=opts.ref_image,
+        mask=pica_mask)
 
     plot_intensity_vectors(
-        opts.ref_image, fpol_image, pangle_image,
-        opts.mask_name, oup=opts.prefix)
+        opts.ref_image, map_names["fpol"], map_names["angle"],
+        mask=opts.mask_name, oup=opts.prefix)
 
 
     """
     Running this script with
     
-    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prod/some-plots
+    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
     """
 
