@@ -7,6 +7,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
 from matplotlib import ticker
+from casatasks import imstat
 import scipy.ndimage as snd
 
 from matplotlib.colors import LogNorm
@@ -192,7 +193,8 @@ def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
 class PaperPlots:
 
     @staticmethod
-    def figure_4b(image, mask, start=0.004, smooth_sigma=13, output="4b-intensity-contours.png"):
+    def figure_4b(image, mask, start=0.004, smooth_sigma=13,
+        output="4b-intensity-contours.png"):
 
         data = rfu.get_masked_data(image, mask)
         # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
@@ -232,15 +234,15 @@ class PaperPlots:
     @staticmethod
     def table2(cube, region, output="2-table.png"):
         """
+        Monitor Change in the flux of the core with frequency
+
         cube: str
             Name of input i image cube
         region: str
             Region under investigation e.g pica core
-            'ellipse [[05:19:49.72009, -045.46.43.8995], [15.0000arcsec, 15.0000arcsec], 0.00000000deg]'
-            can be gotten from casa region file
+            Pass the name of this CTRF region file
 
         """
-        from casatasks import imstat
 
         """
         see: https://casa.nrao.edu/docs/TaskRef/imstat-task.html
@@ -249,9 +251,7 @@ class PaperPlots:
         # in this case axis 2 (the frequency axis)  
         """
         stats = imstat(cube, region=region, axes=[0,1])
-        flux = stats["flux"]
-        mean = stats["mean"]
-        sigma = stats["sigma"]
+        
         chans = np.arange(flux.size)
 
         fig, ax = plt.subplots(figsize=FIGSIZE)
@@ -273,7 +273,65 @@ class PaperPlots:
 
     
     @staticmethod
-    def figure_5b(intensity, image, mask, start=0.004, smooth_sigma=13, output="5b-spi-intensity-contours.png"):
+    def table3(cube, ereg, wreg, output="3-table-lobe-fluxes.png", smooth_sigma=10):
+        plt.style.use("seaborn")
+        """
+        Monitor change of lobes' flux with frequncy
+        cube: str
+            Name of input i image cube
+        (e|w)reg: str
+            Mask in which stats will be calculated for the East and West lobe
+            Respectively
+
+        see: https://casa.nrao.edu/docs/TaskRef/imstat-task.html
+        # These are the display axes, the calculation of statistics occurs  
+        # for each (hyper)plane along axes not listed in the axes parameter,  
+        # in this case axis 2 (the frequency axis)  
+        """
+        
+        estats = imstat(cube, axes=[0,1], region=ereg, stretch=True)
+        wstats = imstat(cube, axes=[0,1], region=wreg, stretch=True)
+        
+        eflux = estats["flux"]
+        wflux = wstats["flux"]
+
+        chans = np.arange(eflux.size)
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, ncols=2, sharex=True)
+
+        # Eastern lobe
+        ax[0].plot(chans, eflux, "bo", label="flux [Jy]")
+        ax[0].plot(
+            chans, snd.gaussian_filter(eflux, sigma=smooth_sigma),
+            "r--", label=fr"Gaussian fit {smooth_sigma}$\sigma$")
+   
+        ax[0].set_xlabel("Channel")
+        ax[0].set_ylabel("Spectral fluxes*")
+        ax[0].set_title(f"Eastern Lobe, Total Flux sum: {np.sum(eflux):.3f}")
+        ax[0].minorticks_on()
+
+        # Western lobe
+        ax[1].plot(chans, wflux, "bo", label="flux [Jy]")
+        ax[1].plot(
+            chans, snd.gaussian_filter(wflux, sigma=smooth_sigma),
+            "r--", label=fr"Gaussian fit {smooth_sigma}$\sigma$")
+
+        ax[1].set_xlabel("Channel")
+        ax[1].set_ylabel("Spectral fluxes*")
+        ax[1].set_title(f"Western Lobe, Total Flux sum: {np.sum(wflux):.3f}")
+        ax[1].minorticks_on()
+
+        fig.suptitle("Flux change in Pictor A lobes")
+        plt.legend()
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+    
+    @staticmethod
+    def figure_5b(intensity, image, mask, start=0.004, smooth_sigma=13,
+        output="5b-spi-intensity-contours.png"):
         """
         image:
             The SPI image
@@ -320,7 +378,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_8(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="8-dop-contours-mfs.png"):
+    def figure_8(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
+        output="8-dop-contours-mfs.png"):
         """
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
@@ -425,7 +484,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_9a(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="9a-dop-mfs.png"):
+    def figure_9a(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
+        output="9a-dop-mfs.png"):
         """
         # Degree of polzn lines without the contours
     
@@ -493,7 +553,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_10(q_image, u_image, mask, start=0.004, smooth_sigma=1, output="10-lpol-mfs.png"):
+    def figure_10(q_image, u_image, mask, start=0.004, smooth_sigma=1,
+        output="10-lpol-mfs.png"):
         """
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
@@ -556,7 +617,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_14(intensity, i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="14-depolzn.png"):
+    def figure_14(intensity, i_image, q_image, u_image, mask, start=0.004,
+        smooth_sigma=1, output="14-depolzn.png"):
         """
         # Degree of polzn lines without the contours
         # here we shall get the cube and use the first and last channels
@@ -639,7 +701,7 @@ class PaperPlots:
         smooth_sigma
             Factor to smooth the contours
         """
-        
+        plt.close("all")
         rm_lobes = rfu.get_masked_data(rm_image, lmask)
         intensity = rfu.get_masked_data(intensity, all_mask)
 
@@ -674,11 +736,12 @@ class PaperPlots:
         # so that I can zoom into the image easily and automatically
         ydim, xdim = np.where(rm_lobes.mask == False)
         wiggle = 10
+        bins = 15
         plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
         plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
 
         west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
-        west_hist.hist(w_lobe.compressed(), bins=20, log=True,
+        west_hist.hist(w_lobe.compressed(), bins=bins, log=False,
             orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="blue", 
             histtype="step")
 
@@ -689,7 +752,7 @@ class PaperPlots:
         west_hist.xaxis.set_visible(False)
 
         east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
-        east_hist.hist(e_lobe.compressed(), bins=20, log=False,
+        east_hist.hist(e_lobe.compressed(), bins=bins, log=False,
             orientation="vertical", fill=False, ls="--", lw=1, edgecolor="blue",
             histtype="step")
         east_hist.xaxis.tick_top()
@@ -698,6 +761,9 @@ class PaperPlots:
         east_hist.yaxis.set_visible(False)
         
         plt.subplots_adjust(wspace=.01, hspace=0)
+        
+        east_hist.set_xlim(-200, 200)
+        west_hist.set_ylim(-200, 200)
 
         fig.tight_layout()
         fig.savefig(output)
@@ -715,8 +781,6 @@ def run_paper_mill():
 
     """
 
-    region = 'ellipse [[05:19:49.72009, -045.46.43.8995], [15.0000arcsec, 15.0000arcsec], 0.00000000deg]'
-
     mask = "masks/true_mask.fits"
 
     cubes = [
@@ -732,7 +796,11 @@ def run_paper_mill():
     udata = tpp.rfu.read_image_cube(cubes[2])["data"]
 
 
-    tpp.PaperPlots.table2(cubes[0], region=region)
+    tpp.PaperPlots.table2(cubes[0], region="masks/important_regions/lobes/core-ctrf")
+    tpp.PaperPlots.table3(
+        cubes[0], ereg="masks/important_regions/lobes/east-lobe-ctrf",
+        wreg="masks/important_regions/lobes/west-lobe-ctrf")
+        
     tpp.PaperPlots.figure_8(*imgs, mask)
     tpp.PaperPlots.figure_9a(*imgs, mask)
     tpp.PaperPlots.figure_10(*imgs[1:], mask)
@@ -763,8 +831,10 @@ def run_paper_mill():
     # Lobe stuff
     tpp.PaperPlots.figure_12_13(
         imgs[0], "6-outpus/products/initial-RM-depth-at-peak-rm.fits",
-        "masks/east-lobe.fits", "masks/west-lobe.fits", "masks/lobes.fits",
+        "masks/east-lobe.fits", "masks/west-lobe.fits", 
+        "masks/lobes.fits", #"masks/no-core.fits"
         "masks/true_mask.fits")
+
 
 
 
