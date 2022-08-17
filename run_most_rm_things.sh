@@ -52,7 +52,16 @@ mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
 for s in $stokes;
 	do
 		echo "make cubes from ALL the output images: ${s^^}";
-		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ ../*-[0-9][0-9][0-9][0-9]-$s-image.fits;
+		
+		images=$(ls ../*-[0-9][0-9][0-9][0-9]-$s-image.fits)
+		fitstool.py --stack=$orig_cubes/${s,,}-cube.fits:FREQ $(echo $images);
+
+		if [[ ${s,,} = "i" ]]; then
+			images=$(ls ../*-[0-9][0-9][0-9][0-9]-$s-model.fits);
+			fitstool.py --stack=$orig_cubes/${s,,}-model-cube.fits:FREQ $(echo $images);
+			images=$(ls ../*-[0-9][0-9][0-9][0-9]-$s-residual.fits);
+			fitstool.py --stack=$orig_cubes/${s,,}-residual-cube.fits:FREQ $(echo $images);
+		fi
 
 		echo "Plot the beams to identify which should be flagged";
 		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
@@ -72,6 +81,8 @@ echo -e "\n############################################################"
 echo "copy I MFS image reference image here";
 echo -e "############################################################\n"
 cp ../*MFS-I-image.fits i-mfs.fits
+cp ../*MFS-Q-image.fits q-mfs.fits
+cp ../*MFS-U-image.fits u-mfs.fits
 
 
 echo -e "\n############################################################"
@@ -104,7 +115,8 @@ echo -e "############################################################\n"
 for s in $stokes;
 	do
 		echo "Make the selection cubes: ${s^^}";
-		fitstool.py --stack=$sel_cubes/${s,,}-image-cube.fits:FREQ  -F "*[0-9][0-9][0-9][0-9]-$s-*image*";
+		images=$(ls *-[0-9][0-9][0-9][0-9]-$s-image.fits);
+		fitstool.py --stack=$sel_cubes/${s,,}-image-cube.fits:FREQ $(echo $images);
 		
 		echo "Convolve the cubes to the same resolution";
 		spimple-imconv -image $sel_cubes/${s,,}-image-cube.fits -o $conv_cubes/${s,,}-conv-image-cube ;
@@ -184,16 +196,12 @@ echo -e "\n############################################################"
 echo "stack I residuals and models";
 echo -e "############################################################\n"
 
-fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits"
-fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits"
 
+images=$(ls *-[0-9][0-9][0-9][0-9]-*residual.fits);
+fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ $(echo $images);
 
-echo -e "\n############################################################"
-echo "Convolve even these to the same beams residuals and models";
-echo -e "############################################################\n"
-
-fitstool.py --stack $sel_cubes/i-residuals.fits:FREQ -F "*residual.fits";
-fitstool.py --stack $sel_cubes/i-models.fits:FREQ -F "*model.fits";
+images=$(ls *-[0-9][0-9][0-9][0-9]-*model.fits);
+fitstool.py --stack $sel_cubes/i-models.fits:FREQ $(echo $images);
 
 echo "Rename the convolved images";
 # Adding || tru so that the error here does not fail the entire program
@@ -215,10 +223,10 @@ echo -e "############################################################\n"
 echo "Normalize the wsums by the largest values";
 
 # # Doing this with a quick python script because, wll I can :) and store in this variable
-wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 2); print(*wsums)")
+wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 4); print(*wsums)")
 
 # cw - channel weights, th-rms threshold factor, acr - add conv residuals, bm -  beam model
-spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l
+spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l --products aeikb
 
 
 
