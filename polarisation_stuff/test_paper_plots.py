@@ -7,6 +7,9 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
 from matplotlib import ticker
+import scipy.ndimage as snd
+
+from matplotlib.colors import LogNorm
 
 import sys
 import os
@@ -186,6 +189,593 @@ def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
 # ref https://stackoverflow.com/questions/40939821/how-to-plot-a-vector-field-over-a-contour-plot-in-matplotlib
 
 
+class PaperPlots:
+
+    @staticmethod
+    def figure_4b(image, mask, start=0.004, smooth_sigma=13, output="4b-intensity-contours.png"):
+
+        data = rfu.get_masked_data(image, mask)
+        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
+        data[np.where(np.isnan(data))] = 0
+        mask = data.mask
+
+        ydim, xdim = np.where(mask == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(image)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        # the image data
+        levels = contour_levels(start, data)
+        ax.contour(
+            snd.gaussian_filter(data, sigma=smooth_sigma),
+            colors="g", linewidths=0.5, origin="lower", levels=levels)
+
+        ax.imshow(data, origin="lower", cmap="magma", vmin=0, vmax=.127, aspect="equal")
+    
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+    
+    @staticmethod
+    def table2(cube, region, output="2-table.png"):
+        """
+        cube: str
+            Name of input i image cube
+        region: str
+            Region under investigation e.g pica core
+            'ellipse [[05:19:49.72009, -045.46.43.8995], [15.0000arcsec, 15.0000arcsec], 0.00000000deg]'
+            can be gotten from casa region file
+
+        """
+        from casatasks import imstat
+
+        """
+        see: https://casa.nrao.edu/docs/TaskRef/imstat-task.html
+        # These are the display axes, the calculation of statistics occurs  
+        # for each (hyper)plane along axes not listed in the axes parameter,  
+        # in this case axis 2 (the frequency axis)  
+        """
+        stats = imstat(cube, region=region, axes=[0,1])
+        flux = stats["flux"]
+        mean = stats["mean"]
+        sigma = stats["sigma"]
+        chans = np.arange(flux.size)
+
+        fig, ax = plt.subplots(figsize=FIGSIZE)
+        ax.plot(chans, flux, "ko", label="flux [Jy]")
+        ax.plot(chans, snd.gaussian_filter(flux, sigma=3), "k--", label="flux fit")
+        # ax.errorbar(chans, mean, yerr=sigma)
+        ax.plot(chans, mean, "bo", label=r"$\mu$ [Jy/beam]")
+        ax.plot(chans, snd.gaussian_filter(mean, sigma=3), "b--", label=r"$\mu$ fit ")
+        ax.fill_between(chans, mean-sigma, mean+sigma, color="b", alpha=0.3, label=r"$\sigma$")
+
+        ax.set_xlabel("Channel")
+        ax.set_ylabel("Spectral fluxes*")
+        plt.title("Flux change in Pictor A nucleus")
+        plt.legend()
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+    
+    @staticmethod
+    def figure_5b(intensity, image, mask, start=0.004, smooth_sigma=13, output="5b-spi-intensity-contours.png"):
+        """
+        image:
+            The SPI image
+        mask:
+            The image mask
+        start:
+            Where the contour levels should start
+        """
+        
+        intensity = rfu.get_masked_data(intensity, mask)
+        data = rfu.get_masked_data(image, mask)
+        mask = data.mask
+
+        ydim, xdim = np.where(mask == False)
+        wiggle = 20
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(image)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+
+        cs = ax.imshow(data, origin="lower", cmap="coolwarm_r", vmin=-1.7, vmax=-0.5, aspect="equal")
+        plt.colorbar(cs, label="Spectral Index")
+
+        # the image data
+        levels = contour_levels(start, intensity)
+        ax.contour(
+            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+    
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+
+    @staticmethod
+    def figure_8(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="8-dop-contours-mfs.png"):
+        """
+        # Degree of polzn lines vs contours
+        # we're not using cubes, we use the MFS images
+        """
+        if isinstance(i_image, str):
+            i_data = rfu.get_masked_data(i_image, mask)
+        else:
+            i_data = i_image
+        
+        if isinstance(q_image, str):
+            q_data = rfu.get_masked_data(q_image, mask)
+        else:
+            q_data = q_image
+        
+        if isinstance(u_image, str):
+            u_data = rfu.get_masked_data(u_image, mask)
+        else:
+            u_data = u_image
+
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = i_data.mask
+
+        if  not np.ma.is_masked(i_data):
+            i_data = np.ma.masked_array(i_data, mask=mask_data)
+        if  not np.ma.is_masked(q_data):
+            q_data = np.ma.masked_array(q_data, mask=mask_data)
+        if  not np.ma.is_masked(u_data):
+            u_data = np.ma.masked_array(u_data, mask=mask_data)
+            
+
+        lpol = np.ma.abs(q_data + 1j*u_data)
+        fpol = np.ma.divide(lpol, i_data)
+        p_angle = 0.5 * np.ma.arctan2(u_data, q_data)
+
+        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
+        # data[np.where(np.isnan(data))] = 0
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+        
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        # the image data
+        levels = contour_levels(start, i_data)
+        ax.contour(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+       
+        cs = ax.contourf(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma), 
+            cmap="coolwarm", origin="lower", levels=levels,
+            locator=ticker.LogLocator())
+
+        plt.colorbar(cs, label="Total Intensity")
+
+        #################################
+        skip = 5
+        slicex = slice(None, fpol.shape[0], skip)
+        slicey = slice(None, fpol.shape[-1], skip)
+        col, row = np.mgrid[slicex, slicey]
+
+        # get M vector by rotating E vector by 90
+        p_angle = p_angle[slicex, slicey] #+ (np.pi/2)
+        fpol = fpol[slicex, slicey]
+
+        # nornalize this
+        
+        fpol = np.ma.masked_greater(fpol, 1)
+        fpol = np.ma.masked_less(fpol, 0)
+        scales = fpol / np.ma.max(fpol)
+    
+        # scale as amplitude
+        u = scales * np.cos(p_angle)
+        v = scales * np.sin(p_angle)
+
+        qv = ax.quiver(
+            row, col, u, v, angles="xy", pivot='tail', headlength=4,
+            width=0.0008, scale=5, headwidth=0)
+        
+        #################################
+
+    
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+
+    @staticmethod
+    def figure_9a(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="9a-dop-mfs.png"):
+        """
+        # Degree of polzn lines without the contours
+    
+        """
+        if isinstance(i_image, str):
+            i_data = rfu.get_masked_data(i_image, mask)
+        else:
+            i_data = i_image
+        
+        if isinstance(q_image, str):
+            q_data = rfu.get_masked_data(q_image, mask)
+        else:
+            q_data = q_image
+        
+        if isinstance(u_image, str):
+            u_data = rfu.get_masked_data(u_image, mask)
+        else:
+            u_data = u_image
+
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = i_data.mask
+
+        if  not np.ma.is_masked(i_data):
+            i_data = np.ma.masked_array(i_data, mask=mask_data)
+        if  not np.ma.is_masked(q_data):
+            q_data = np.ma.masked_array(q_data, mask=mask_data)
+        if  not np.ma.is_masked(u_data):
+            u_data = np.ma.masked_array(u_data, mask=mask_data)
+            
+ 
+        lpol = np.abs(q_data + 1j*u_data)
+        fpol = np.divide(lpol, i_data)
+        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
+        # data[np.where(np.isnan(data))] = 0
+        mask_data = i_data.mask
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+
+        cs = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
+        plt.colorbar(cs, label="Degree of polarisation [Fractional Polarisation]")
+
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+
+    @staticmethod
+    def figure_10(q_image, u_image, mask, start=0.004, smooth_sigma=1, output="10-lpol-mfs.png"):
+        """
+        # Degree of polzn lines vs contours
+        # we're not using cubes, we use the MFS images
+        """
+        
+        if isinstance(q_image, str):
+            q_data = rfu.get_masked_data(q_image, mask)
+        else:
+            q_data = q_image
+        
+        if isinstance(u_image, str):
+            u_data = rfu.get_masked_data(u_image, mask)
+        else:
+            u_data = u_image
+
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = q_data.mask
+
+        if  not np.ma.is_masked(q_data):
+            q_data = np.ma.masked_array(q_data, mask=mask_data)
+        if  not np.ma.is_masked(u_data):
+            u_data = np.ma.masked_array(u_data, mask=mask_data)
+
+        lpol = np.abs(q_data + 1j*u_data)
+        
+        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
+        # data[np.where(np.isnan(data))] = 0
+        mask_data = q_data.mask
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        
+        cs = ax.imshow(lpol, origin="lower", cmap="coolwarm", aspect="equal",
+        # norm=LogNorm(vmin=0.005, vmax=0.05)
+        vmin=0.005, vmax=0.05
+        )
+        plt.colorbar(cs, label="Linear Polarisation Power |P|")
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+
+    @staticmethod
+    def figure_14(intensity, i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1, output="14-depolzn.png"):
+        """
+        # Degree of polzn lines without the contours
+        # here we shall get the cube and use the first and last channels
+        intesity: 
+            Single image with for the intensity contours. Usually the MFS
+        (i|q|u)-image
+            Cubes containing data for all the channels available. I will only use the
+            first and last channels available int he cube
+        """
+        mask_data = fits.getdata(mask).squeeze()
+        mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+
+        intensity = rfu.get_masked_data(intensity, mask)
+        i_data = fits.getdata(i_image).squeeze()
+        q_data = fits.getdata(q_image).squeeze()
+        u_data = fits.getdata(u_image).squeeze()
+
+ 
+        lpol = np.abs(q_data + 1j*u_data)
+        fpol = np.divide(lpol, i_data)[[0,-1]]
+
+        fpol = np.ma.masked_greater(fpol, 1)
+        fpol = np.ma.masked_less(fpol, 0)
+
+
+        fpol = np.ma.masked_array(fpol.data, mask=np.logical_or(fpol.mask, mask_data))
+
+        depoln = fpol[0]/fpol[-1]
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        levels = contour_levels(start, i_data)
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        ax.contour(
+            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+
+        cs = ax.imshow(depoln, origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
+        plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]")
+
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=200)
+        plt.close("all")
+
+    
+    @staticmethod
+    def figure_12_13(intensity, rm_image, emask, wmask, lmask, all_mask,
+        start=0.0552, smooth_sigma=0, output="12-rm-lobes.png"):
+        """
+        RM and histogram for lobes 
+
+        intensity:
+            Image to be used for the intensity contours. Usually MFS
+        rm_image
+            Image containing the required RMs
+        emask
+            Eastern lobe mask
+        wmask
+            Western lobe mask
+        all_mask
+            Pictor A mask
+        start
+            Where the contours should start
+        smooth_sigma
+            Factor to smooth the contours
+        """
+        
+        rm_lobes = rfu.get_masked_data(rm_image, lmask)
+        intensity = rfu.get_masked_data(intensity, all_mask)
+
+        w_lobe = rfu.get_masked_data(rm_image, wmask)
+        e_lobe = rfu.get_masked_data(rm_image, emask)
+
+        wcs = rfu.read_image_cube(lmask)["wcs"]
+
+        fig = plt.figure(figsize=FIGSIZE)
+        
+        image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2, projection=wcs)
+        image = set_image_projection(image)
+        
+        # swich of these ticks
+        image.tick_params(axis="x", top=False)
+        image.tick_params(axis="y", right=False)
+        # #image.axis("off")
+
+        ca = image.imshow(
+            rm_lobes, origin="lower", cmap="coolwarm", vmin=30,
+            vmax=80, aspect="equal")
+        
+        plt.colorbar(ca, location="right", shrink=0.90, pad=0.01,
+            label="RM", drawedges=False)
+
+        levels = contour_levels(start, intensity)
+        image.contour(
+            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+        
+
+        # so that I can zoom into the image easily and automatically
+        ydim, xdim = np.where(rm_lobes.mask == False)
+        wiggle = 10
+        plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
+        plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
+
+        west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
+        west_hist.hist(w_lobe.compressed(), bins=20, log=True,
+            orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="blue", 
+            histtype="step")
+
+        west_hist.minorticks_on()
+        west_hist.yaxis.tick_right()
+
+        west_hist.set_title("Western Lobe (Right Hand) RM Distribution")
+        west_hist.xaxis.set_visible(False)
+
+        east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
+        east_hist.hist(e_lobe.compressed(), bins=20, log=False,
+            orientation="vertical", fill=False, ls="--", lw=1, edgecolor="blue",
+            histtype="step")
+        east_hist.xaxis.tick_top()
+        east_hist.minorticks_on()
+        east_hist.set_title("Eastern Lobe (Left Hand) RM Distribution")
+        east_hist.yaxis.set_visible(False)
+        
+        plt.subplots_adjust(wspace=.01, hspace=0)
+
+        fig.tight_layout()
+        fig.savefig(output)
+        print(f"Output is at: {output}")
+
+
+def run_paper_mill():
+    """
+    TO BE RUN IN THE IPYTHON TERMINAL
+    add
+
+        %load_ext autoreload
+        %autoreload 2
+        import test_paper_plots as tpp
+
+    """
+
+    region = 'ellipse [[05:19:49.72009, -045.46.43.8995], [15.0000arcsec, 15.0000arcsec], 0.00000000deg]'
+
+    mask = "masks/true_mask.fits"
+
+    cubes = [
+    '6-outpus/intermediates/selection-cubes/i-image-cube.fits',
+    '6-outpus/intermediates/selection-cubes/q-image-cube.fits',
+    '6-outpus/intermediates/selection-cubes/u-image-cube.fits'
+    ]
+
+    imgs = ["i-mfs.fits", "q-mfs.fits", "u-mfs.fits"]
+
+    idata = tpp.rfu.read_image_cube(cubes[0])["data"]
+    qdata = tpp.rfu.read_image_cube(cubes[1])["data"]
+    udata = tpp.rfu.read_image_cube(cubes[2])["data"]
+
+
+    tpp.PaperPlots.table2(cubes[0], region=region)
+    tpp.PaperPlots.figure_8(*imgs, mask)
+    tpp.PaperPlots.figure_9a(*imgs, mask)
+    tpp.PaperPlots.figure_10(*imgs[1:], mask)
+    tpp.PaperPlots.figure_14(imgs[0], *cubes, mask)
+
+
+    images = {
+        "from_rick/pic-l-all-4k.fits": "fig4/4b-rick-intensity-contours-mpl.png", 
+        "i-mfs.fits": "fig4/4b-intensity-contours-mpl.png",
+        }
+
+    for im, out in images.items():
+        tpp.PaperPlots.figure_4b(im, mask, output=out)
+
+    tpp.PaperPlots.figure_5b(
+        imgs[0],
+        "6-outpus/products/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
+        output="5b-spi-with-contours-mpl.png")
+
+    for _ in range(idata.shape[0]):
+        tpp.PaperPlots.figure_8(
+            idata[_], qdata[_], udata[_], mask, output=f"fig8/poln{_}.png")
+        tpp.PaperPlots.figure_9a(
+            idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
+        tpp.PaperPlots.figure_10(
+            qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
+
+    # Lobe stuff
+    tpp.PaperPlots.figure_12_13(
+        imgs[0], "6-outpus/products/initial-RM-depth-at-peak-rm.fits",
+        "masks/east-lobe.fits", "masks/west-lobe.fits", "masks/lobes.fits",
+        "masks/true_mask.fits")
+
+
+
+def contour_levels(start, data):
+    # ratio between the levels is root(2)
+    print("Generating contour levels")
+    levels = [start * np.sqrt(2)**_ for _ in range(30)]
+    levels = np.ma.masked_greater(levels, np.nanmax(data)).compressed()
+    return levels
+
+
 def add_contours(axis, data, levels=None):
     """
     contours: total intensity
@@ -209,10 +799,7 @@ def add_contours(axis, data, levels=None):
 
     if levels is None:
         # setup contour levels factor of root two between n+1 and n
-        lstep = 0.5
-        # I'm setting the first level at 0.01, because 2**0 is 1
-        levels = 2**np.arange(0, data.max()+10, lstep)*0.001
-        levels = np.ma.masked_greater(levels, data.max()).compressed()
+        levels = contour_levels(0.004, data)
 
     # contour lines
     axis.contour(data, colors="k", linewidths=0.5, origin="lower", levels=levels)
@@ -241,7 +828,7 @@ def add_magnetic_vectors(axis, fpol_data, pangle_data):
     pangle_data = pangle_data[slicex, slicey] + (np.pi/2)
     fpol_data = fpol_data[slicex, slicey]
 
-    # nornalize this
+    # normalize this
     
     fpol_data = np.ma.masked_greater(fpol_data, 1)
     scales = fpol_data / fpol_data.max()
