@@ -44,8 +44,7 @@ class Pol():
 
     @staticmethod
     def power_fn(q, u):
-        # or np.abs(q + 1j*u)
-        return np.sqrt(np.square(q) + np.square(u))
+        return np.abs(q + 1j*u)
     
     @staticmethod
     def power_error(p, q, u, q_err, u_err):
@@ -58,7 +57,7 @@ class Pol():
     
     @staticmethod
     def fractional_pol(i, q, u):
-        fpol = (q/i) + (u* 1j/i)
+        fpol = Pol.power_fn(q, u)/i
         return fpol
     
     @staticmethod

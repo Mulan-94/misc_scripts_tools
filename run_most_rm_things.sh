@@ -229,6 +229,14 @@ wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = 
 spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l --products aeikb
 
 
+echo -e "\n############################################################"
+echo "Genertate images for the respective lobes";
+echo -e "############################################################\n"
+
+for im in "iquv"; do
+	fitstool.py --prod $sel_cubes/$im-image-cube.fits $mask_dir/true_mask.fits -o $sel_cubes/$im-mxd-image-cube.fits;
+	done
+
 
 echo -e "\n############################################################"
 echo "Make some other plots for paper";

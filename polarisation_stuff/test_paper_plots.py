@@ -273,15 +273,15 @@ class PaperPlots:
 
     
     @staticmethod
-    def table3(cube, ereg, wreg, output="3-table-lobe-fluxes.png", smooth_sigma=10):
+    def table3(elobe, wlobe, output="3-table-lobe-fluxes.png", smooth_sigma=10):
         plt.style.use("seaborn")
         """
         Monitor change of lobes' flux with frequncy
-        cube: str
-            Name of input i image cube
-        (e|w)reg: str
-            Mask in which stats will be calculated for the East and West lobe
-            Respectively
+        (e|w)lobe:
+            Cube of the eastern or western lobe. These can be generated using
+            Fitstools in the following way:
+            fitstool.py --prod i-image-cube.fits masks/west-lobe.fits -o west-lobe-cube.fits
+            Note that we multiply the image x mask and not mask x image!
 
         see: https://casa.nrao.edu/docs/TaskRef/imstat-task.html
         # These are the display axes, the calculation of statistics occurs  
@@ -289,8 +289,8 @@ class PaperPlots:
         # in this case axis 2 (the frequency axis)  
         """
         
-        estats = imstat(cube, axes=[0,1], region=ereg, stretch=True)
-        wstats = imstat(cube, axes=[0,1], region=wreg, stretch=True)
+        estats = imstat(elobe, axes=[0,1], stretch=True)
+        wstats = imstat(wlobe, axes=[0,1], stretch=True)
         
         eflux = estats["flux"]
         wflux = wstats["flux"]
@@ -791,20 +791,18 @@ def run_paper_mill():
 
     imgs = ["i-mfs.fits", "q-mfs.fits", "u-mfs.fits"]
 
-    idata = tpp.rfu.read_image_cube(cubes[0])["data"]
-    qdata = tpp.rfu.read_image_cube(cubes[1])["data"]
-    udata = tpp.rfu.read_image_cube(cubes[2])["data"]
+    idata = rfu.read_image_cube(cubes[0])["data"]
+    qdata = rfu.read_image_cube(cubes[1])["data"]
+    udata = rfu.read_image_cube(cubes[2])["data"]
 
 
-    tpp.PaperPlots.table2(cubes[0], region="masks/important_regions/lobes/core-ctrf")
-    tpp.PaperPlots.table3(
-        cubes[0], ereg="masks/important_regions/lobes/east-lobe-ctrf",
-        wreg="masks/important_regions/lobes/west-lobe-ctrf")
-        
-    tpp.PaperPlots.figure_8(*imgs, mask)
-    tpp.PaperPlots.figure_9a(*imgs, mask)
-    tpp.PaperPlots.figure_10(*imgs[1:], mask)
-    tpp.PaperPlots.figure_14(imgs[0], *cubes, mask)
+    PaperPlots.table2(cubes[0], region="masks/important_regions/lobes/core-ctrf")
+    PaperPlots.table3(elobe="east-lobe-cube.fits", wlobe="west-lobe-cube.fits")
+
+    PaperPlots.figure_8(*imgs, mask)
+    PaperPlots.figure_9a(*imgs, mask)
+    PaperPlots.figure_10(*imgs[1:], mask)
+    PaperPlots.figure_14(imgs[0], *cubes, mask)
 
 
     images = {
@@ -813,23 +811,23 @@ def run_paper_mill():
         }
 
     for im, out in images.items():
-        tpp.PaperPlots.figure_4b(im, mask, output=out)
+        PaperPlots.figure_4b(im, mask, output=out)
 
-    tpp.PaperPlots.figure_5b(
+    PaperPlots.figure_5b(
         imgs[0],
         "6-outpus/products/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
         output="5b-spi-with-contours-mpl.png")
 
     for _ in range(idata.shape[0]):
-        tpp.PaperPlots.figure_8(
+        PaperPlots.figure_8(
             idata[_], qdata[_], udata[_], mask, output=f"fig8/poln{_}.png")
-        tpp.PaperPlots.figure_9a(
+        PaperPlots.figure_9a(
             idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
-        tpp.PaperPlots.figure_10(
+        PaperPlots.figure_10(
             qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
 
     # Lobe stuff
-    tpp.PaperPlots.figure_12_13(
+    PaperPlots.figure_12_13(
         imgs[0], "6-outpus/products/initial-RM-depth-at-peak-rm.fits",
         "masks/east-lobe.fits", "masks/west-lobe.fits", 
         "masks/lobes.fits", #"masks/no-core.fits"
