@@ -33,6 +33,9 @@ echo "Setting up variables, and the selection of channels";
 stokes="I Q U V";
 sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" "44" "45" "46" "47" "48" "49" "50" "51" "52" "53" "54" "55" "60" "72" "73" "74");
 
+#what to name the stuff: for the scrapper!
+data_suffix="circle-t0.05";
+
 
 export orig_cubes="intermediates/original-cubes";
 export sel_cubes="intermediates/selection-cubes";
@@ -140,8 +143,6 @@ echo -e "\n############################################################"
 echo "Generate various interesting LoS above some certain threshold";
 echo -e "############################################################\n"
 
-#what to name the stuff
-data_suffix="circle-t0.05";
 
 # Appropriate 20-best, 18-better, 16-more-data
 python qu_pol/scrap.py -rs 5 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits --regions-threshold 16
