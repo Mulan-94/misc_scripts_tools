@@ -368,6 +368,7 @@ if __name__ == "__main__":
             light_speed = 3e8
             lam2 = (light_speed/freq)**2
 
+            # get the linear polzn values that are not nAN
             ind_nan = ~np.isnan(np.absolute(linear_pol))
             linear_pol = linear_pol[ind_nan]
             lam2 = lam2[ind_nan]
@@ -375,13 +376,14 @@ if __name__ == "__main__":
             if linear_pol.size==0:
                 print(f"Skipping region {reg_num}")
                 continue
-
+            
+            stokes_i = stokes_i[ind_nan]
 
             rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
                 phi_step=opts.depth_step, clean=True)
             
             del rm_products["fcomp"]
-            out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + "-depths")
+            out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + f"-depths-{opts.max_fdepth}")
             outfile = os.path.join(out_dir, f"reg_{reg_num}.npz")
             print(f"Saving data to:         {outfile}")
             np.savez(outfile, **rm_products)
@@ -390,16 +392,16 @@ if __name__ == "__main__":
             plt.close("all")
             fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
 
-            ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
-            #ax[0].plot(lam2, linear_pol.real, 'b.', label='Q')
-            #ax[0].plot(lam2, linear_pol.imag, 'r.', label='U')
+            # ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
+            # ax[0].set_ylabel('Polarisation Intensity [Jy/bm]')
+            # ax[0].legend(loc='best')
+            
+            ax[0].plot(lam2, np.absolute(linear_pol)/stokes_i, 'o')
             ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-            ax[0].set_ylabel('Polarisation Intensity [Jy beam$^{-1}$')
-            ax[0].legend(loc='best')
+            ax[0].set_ylabel('Fractional Polarisation')
+            
 
             ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
-            #ax[1].plot(rm_products['depths'], rm_products['fdirty'].real, 'b', label='real')
-            #ax[1].plot(rm_products['depths'], rm_products['fdirty'].imag, 'r', label='imag')
 
             if "fclean" in rm_products:
                 ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
@@ -410,7 +412,7 @@ if __name__ == "__main__":
             
 
             ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
-            ax[1].set_ylabel('Polarisation Intensity')
+            ax[1].set_ylabel('Farady Spectrum')
             ax[1].legend(loc='best')
 
             fig.tight_layout()
