@@ -233,7 +233,7 @@ def plot_data(lam, plam, phi, fphi):
     plt.show()
 
 
-def rm_synthesis(lambda_sq, lpol, phi_max=5000, phi_step=10, niter=1000, gain=0.1,
+def rm_synthesis(lambda_sq, lpol, phi_max=600, phi_step=10, niter=1000, gain=0.1,
     clean=False):
     """
     lambda_sq:
@@ -340,6 +340,9 @@ def arg_parser():
     parse.add_argument("--depth-step", dest="depth_step", type=int,
         default=10,
         help="Faraday depth step. Default is 10")
+    parse.add_argument("-iters", "--iters", dest="niters", type=int,
+        default=1000,
+        help="Number of RM clean iterations. Default is 1000")
     return parse
 
 
@@ -380,7 +383,7 @@ if __name__ == "__main__":
             stokes_i = stokes_i[ind_nan]
 
             rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
-                phi_step=opts.depth_step, clean=True)
+                phi_step=opts.depth_step, niter=opts.niters, clean=True)
             
             del rm_products["fcomp"]
             out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + f"-depths-{opts.max_fdepth}")

@@ -111,7 +111,7 @@ def read_data(image, freq=True):
         sys.exit('>>> could not load %s. Aborting...'%image)
 
 
-def call_fitting(args, wavelengths=None):
+def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
     """
     Returns
 
@@ -127,9 +127,13 @@ def call_fitting(args, wavelengths=None):
     peak_depth
         Faraday depth at clean RM peak
     cleaned_amp
-        Amplitude of cleaned RM spectra
+        Amplitude of cleaned the entire Farady  spectra
     peak_fpol
         Fpol at the center freq, or the peak at all freqs
+
+
+    pdata: is the total linearly polarised intensity
+    fpdata: is the fractional polarisation
     """
     x, y = args
 
@@ -140,23 +144,26 @@ def call_fitting(args, wavelengths=None):
     Pol = Pol[ind_nans]
     wave_sq =  wavelengths[ind_nans]
 
-    # RM synth on this single pixel    
-    phi_range, fcleaned = rm_synthesis(wave_sq, Pol,phi_max=500, phi_step=5,
-            niter=500, gain=0.1, plot=False) 
+    # RM synth on this single pixel. We pass in the complex polarised data
+    phi_range, fcleaned = rm_synthesis(wave_sq, Pol, phi_max=max_depth,
+        phi_step=phi_step, niter=niters, gain=0.1, plot=False) 
 
     # get the peak index of the clean faraday spectra
     peak_idx =  np.where(abs(fcleaned) == abs(fcleaned).max())[0]
 
-    # get the depth at which RM is peak
+    # get the depth at which RM is peak. Is this the estimated RM?
     peak_depth = phi_range[peak_idx][0]
 
     # get the peak complex fclean
     peak_complex_rm = fcleaned[peak_idx][0]
+
+    #this gives the estimated intrinsic fractional polarisation??
     peak_rm_amp = np.abs(peak_complex_rm)
 
-    # get the polarisation angle at the peak
+    # get the polarisation angle at the peak fday spectrum (intrinsic fpol?)
     pol_angle = 0.5 *np.arctan2(peak_complex_rm.imag, peak_complex_rm.real)
 
+    # Trying to get the frac pol at the center freq for this x,y pixel
     nfp = np.abs(fp_data[:, x, y])
     # nfp_peak_idx = np.where(nfp == nfp.max())
     # peak_fpol = nfp[nfp_peak_idx][0]
@@ -201,10 +208,18 @@ def arg_parser():
     add('-u', '--ucube', dest='ufits', help='Stokes U cube (fits)')
     add('-i', '--icube', dest='ifits', help='Stokes I cube (fits)')
     add('-f', '--freq', dest='freq', help='Frequency file (text)')  
-    add('-ncore', '--numpr', dest='numProcessor', help='number of cores to use. Default 1.', 
-        default=60, type=int)
-    add('-mask', '--maskfits', dest='maskfits', help='A mask image (fits)', default=None)
+
+    add('-ncore', '--ncore', dest='numProcessor',
+        help='number of cores to use. Default 60.', default=60, type=int)
+    add('-mask', '--maskfits', dest='maskfits',
+        help='A mask image (fits)', default=None)
     add('-o', '--prefix', dest='prefix', help='This is a prefix for output files.')
+    add("-niters", "--niters", dest="niters",
+        help="Number of clean iterations. Default 1000", default=1000)
+    add("-md", "--max-depth", dest="max_depth",
+        help="Maximum Farady depth to fit for. Default 500", default=500)
+    add("--depth-step", dest="depth_step",
+        help="Depth stepping. Default 1", default=1)
    
     return parser.parse_args()
 
@@ -227,14 +242,15 @@ def main():
     qdata, qhdr = read_data(args.qfits) # run Q-cube 
     udata, uhdr = read_data(args.ufits) # run U-cube
 
+
+    pdata = qdata + 1j*udata
+
     if args.ifits:
         idata, ihdr = read_data(args.ifits) # run I-cube
-        fp_data = (qdata/idata) + 1j * (udata/idata)
+        # fp_data = (qdata/idata) + 1j * (udata/idata)
+        fp_data = np.abs(pdata) / idata
         # high point[6, 224, 111] 
-        # set_trace()
 
-
-    pdata = qdata + 1j * udata
  
     N1, N2, N3 = qdata.shape
     p0_map = np.zeros([N2, N3])
@@ -259,7 +275,11 @@ def main():
 
     results = []
     with futures.ProcessPoolExecutor(args.numProcessor) as executor:
-        results = executor.map(partial(call_fitting,wavelengths=wavelengths), xy)
+        results = executor.map(
+            partial(
+                call_fitting,wavelengths=wavelengths, max_depth=args.max_depth,
+                niters=args.niters, phi_step=args.depth_step), 
+            xy)
 
     # # test bedding
     # for _v in xy:
@@ -273,24 +293,40 @@ def main():
         PA_map[an] = results[_][1]
         RM_map[an] = results[_][2]
         fp_map[an] = results[_][4]
+
+    
     
     # now save the fits
+    # intrisic fractional polarisation
     p0_hdr = modify_fits_header(qhdr, ctype='p', unit='ratio')
+
+    #polarisation angle
     PA_hdr = modify_fits_header(qhdr, ctype='PA', unit='radians')
+
+    # RM - depth at the peak faraday spectrum
     RM_hdr = modify_fits_header(qhdr, ctype='RM', unit='rad/m^2')
+
+    # polarised flux
     pf_hdr = modify_fits_header(qhdr, ctype='FPOL', unit='x100%')
 
-    # Amplitude of the clean peak RM
-    pyfits.writeto(args.prefix + '-p0-peak-rm.fits', p0_map, p0_hdr, overwrite=True)
+    # Amplitude of the clean peak RM (intrinsic fpol)
+    pyfits.writeto(
+        args.prefix + '-p0-peak-rm.fits', p0_map, p0_hdr, overwrite=True)
 
-    # pol angle at peak RM
-    pyfits.writeto(args.prefix + '-PA-pangle-at-peak-rm.fits', PA_map, PA_hdr, overwrite=True)
+    # pol angle at peak RM (polarisation angle)
+    pyfits.writeto(
+        args.prefix + '-PA-pangle-at-peak-rm.fits', PA_map, PA_hdr,
+        overwrite=True)
 
-    # Depth at peak RM
-    pyfits.writeto(args.prefix + '-RM-depth-at-peak-rm.fits', RM_map, RM_hdr, overwrite=True)
+    # Depth at peak RM (Actual RM at the peak intrisic fpol)
+    pyfits.writeto(
+        args.prefix + '-RM-depth-at-peak-rm.fits', RM_map, RM_hdr,
+        overwrite=True)
 
     #frac pol at central freq
-    pyfits.writeto(args.prefix + '-FPOL-at-center-freq.fits', fp_map, pf_hdr, overwrite=True)
+    pyfits.writeto(
+        args.prefix + '-FPOL-at-center-freq.fits', fp_map, pf_hdr,
+        overwrite=True)
 
     print("Donesies!")
 

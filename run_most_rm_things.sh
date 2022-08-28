@@ -144,15 +144,24 @@ echo "Generate various interesting LoS above some certain threshold";
 echo -e "############################################################\n"
 
 
-# Appropriate 20-best, 18-better, 16-more-data
-python qu_pol/scrap.py -rs 5 -t $data_suffix -f selected-freq-images.txt --threshold 0.05 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits --regions-threshold 16
+# I change region size from 5pix to 3 pixels
+python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --threshold 20 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits
+
+
+
+echo -e "\n############################################################"
+echo "Edit the reg file in a way that it can be loaded into CARTA"
+echo -e "############################################################\n"
+
+sed -i "s/text=.*//g" $prods/scrap-outputs/regions/beacons*.reg
 
 
 
 echo -e "\n############################################################"
 echo "Perfrom RM synthesis for various lines of sight generated from previous step and plot the output";
+echo "For pictor I set the maximum depth to 400, depth step 1 looks smoothest, niter from 500-1000 looks similar"
 echo -e "############################################################\n"
-python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 1200
+python qu_pol/rm_synthesis.py -id $prods/scrap-outputs/*$data_suffix -od $prods/rm-plots -md 400 --depth-step 1
 
 
 echo -e "\n############################################################"
@@ -164,6 +173,7 @@ python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/*$data_suffix --yaml qu_
 echo -e "\n############################################################"
 echo "Do some RM maps, fpol maps and other maps";
 echo "Using my mask here, Don't know where yours is but if this step fails, check on that";
+echo "Default maximum depth and number of iterations same as that of previous"
 echo -e "############################################################\n"
 python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv-image-cube.fits -u $conv_cubes/u-conv-image-cube.fits -i $conv_cubes/i-conv-image-cube.fits -ncore 120 -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt 
 
