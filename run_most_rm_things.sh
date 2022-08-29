@@ -241,20 +241,21 @@ spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.
 
 
 echo -e "\n############################################################"
-echo "Genertate images for the respective lobes";
+echo "Generate images for the respective lobes";
 echo -e "############################################################\n"
 
-for im in "iquv"; do
-	fitstool.py --prod $sel_cubes/$im-image-cube.fits $mask_dir/true_mask.fits -o $sel_cubes/$im-mxd-image-cube.fits;
-	done
+
+fitstool.py --prod $sel_cubes/i-image-cube.fits $mask_dir/east-lobe.fits -o ./east-lobe-cube.fits
+fitstool.py --prod $sel_cubes/i-image-cube.fits $mask_dir/west-lobe.fits -o ./west-lobe-cube.fits
 
 
 echo -e "\n############################################################"
 echo "Make some other plots for paper";
 echo -e "############################################################\n" 
 
-python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
+# python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
 
+python qu_pol/test_paper_plots.py
 
 echo -e "\n############################################################"
 echo "                    Done                     "

@@ -8,12 +8,14 @@ from astropy.wcs import WCS
 from glob import glob
 from matplotlib import ticker
 from casatasks import imstat
+from glob import glob
 import scipy.ndimage as snd
 
 from matplotlib.colors import LogNorm
 
 import sys
 import os
+
 sys.path.append(f"{os.environ['HOME']}/git_repos/misc_scripts_n_tools/fits_related/")
 
 import random_fits_utils as rfu
@@ -251,7 +253,9 @@ class PaperPlots:
         # in this case axis 2 (the frequency axis)  
         """
         stats = imstat(cube, region=region, axes=[0,1])
-        
+        flux = stats["flux"]
+        mean = stats["mean"]
+        sigma = stats["sigma"]
         chans = np.arange(flux.size)
 
         fig, ax = plt.subplots(figsize=FIGSIZE)
@@ -736,7 +740,7 @@ class PaperPlots:
         # so that I can zoom into the image easily and automatically
         ydim, xdim = np.where(rm_lobes.mask == False)
         wiggle = 10
-        bins = 15
+        bins = 50
         plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
         plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
 
@@ -779,24 +783,49 @@ def run_paper_mill():
         %autoreload 2
         import test_paper_plots as tpp
 
+    What are used in this function?
+
+    1. selected image cubes from
+    intermediates/selection-cubes/i-image-cube.fits',
+    
+    2. The multifreq images from where this script is running:
+        ./i-mfs.fits
+    
+    3. Path of the masks directory
+    4. Lobe's cubes east and west. These are to be found in the current dir pre-generated
+        ./(east|west)-lobe-cube.fits
+    5. SPI image from
+        ./products/spi-fitting/
+    7. The generated maps from
+        ./products/intial-blabla.fits
+    8. CTRF fregion for the core of the galaxy found in masks
+        ./masks/importat_regions/hotspots/core-ctrf
+
     """
+    print("----------------------------")
+    print("Running paper mill")
+    print("----------------------------")
+    cubes = sorted(glob(
+            os.path.join(".", os.environ["sel_cubes"], "*-image-cube.fits")
+            ))[:3]
 
-    mask = "masks/true_mask.fits"
+    imgs = sorted(glob("./*-mfs.fits"))
+    mask_dir = os.environ["mask_dir"]
+    products = os.environ["prods"]
 
-    cubes = [
-    '6-outpus/intermediates/selection-cubes/i-image-cube.fits',
-    '6-outpus/intermediates/selection-cubes/q-image-cube.fits',
-    '6-outpus/intermediates/selection-cubes/u-image-cube.fits'
-    ]
+    for o_dir in ["fig4", "fig8", "fig9", "fig10"]:
+        if not os.path.isdir(o_dir):
+            os.mkdir(o_dir)
 
-    imgs = ["i-mfs.fits", "q-mfs.fits", "u-mfs.fits"]
+
+    mask = f"{mask_dir}/true_mask.fits"
 
     idata = rfu.read_image_cube(cubes[0])["data"]
     qdata = rfu.read_image_cube(cubes[1])["data"]
     udata = rfu.read_image_cube(cubes[2])["data"]
 
 
-    PaperPlots.table2(cubes[0], region="masks/important_regions/lobes/core-ctrf")
+    PaperPlots.table2(cubes[0], region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
     PaperPlots.table3(elobe="east-lobe-cube.fits", wlobe="west-lobe-cube.fits")
 
     PaperPlots.figure_8(*imgs, mask)
@@ -806,7 +835,7 @@ def run_paper_mill():
 
 
     images = {
-        "from_rick/pic-l-all-4k.fits": "fig4/4b-rick-intensity-contours-mpl.png", 
+        # "from_rick/pic-l-all-4k.fits": "fig4/4b-rick-intensity-contours-mpl.png", 
         "i-mfs.fits": "fig4/4b-intensity-contours-mpl.png",
         }
 
@@ -815,7 +844,7 @@ def run_paper_mill():
 
     PaperPlots.figure_5b(
         imgs[0],
-        "6-outpus/products/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
+        f"{products}/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
         output="5b-spi-with-contours-mpl.png")
 
     for _ in range(idata.shape[0]):
@@ -828,10 +857,10 @@ def run_paper_mill():
 
     # Lobe stuff
     PaperPlots.figure_12_13(
-        imgs[0], "6-outpus/products/initial-RM-depth-at-peak-rm.fits",
-        "masks/east-lobe.fits", "masks/west-lobe.fits", 
-        "masks/lobes.fits", #"masks/no-core.fits"
-        "masks/true_mask.fits")
+        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+        f"{mask_dir}/true_mask.fits")
 
 
 
@@ -1061,54 +1090,58 @@ def parser():
 ######################################################################################
 
 if __name__ == "__main__":
-    
-    opts = parser().parse_args()
 
-    # names for the various rm products
-    map_names = {
-        "amp" : f'{opts.prefix}-p0-peak-rm.fits',
-        "angle" : f'{opts.prefix}-PA-pangle-at-peak-rm.fits',
-        "fpol" : f'{opts.prefix}-FPOL-at-center-freq.fits',
-        "rm" : f'{opts.prefix}-RM-depth-at-peak-rm.fits'
-    }
-
-    images = [map_names[_] for _ in "amp angle rm".split()]
-    
-    pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
-    pangle_data = rfu.read_image_cube(map_names["angle"])["data"]
-    pica_mask = pica_i_data.mask
-
-    stokes = {}
-    for cube in opts.cube_names:
-        stoke = os.path.basename(cube)[0]
-        stokes[stoke] = rfu.read_image_cube(cube)["data"]
-
-    stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
-    stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
-    
-    # plot lobes and their dispersion
-    plot_rm_for_lobes(
-        rot_meas_image=map_names["rm"],
-        e_mask=opts.elobe_mask, w_mask=opts.wlobe_mask,
-        vmin=-100, vmax=100, oup=opts.prefix, ref_image=opts.ref_image)
-
-
-    # plot fpol
-    plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix, mask=pica_mask,
-        ref_image=opts.ref_image)
-    
-    plot_polarised_intensity(
-        stokes["l_pol"], oup=opts.prefix, ref_image=opts.ref_image,
-        mask=pica_mask)
-
-    plot_intensity_vectors(
-        opts.ref_image, map_names["fpol"], map_names["angle"],
-        mask=opts.mask_name, oup=opts.prefix)
-
+    run_paper_mill()
 
     """
-    Running this script with
-    
-    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
-    """
+        opts = parser().parse_args()
 
+        # names for the various rm products
+        map_names = {
+            "amp" : f'{opts.prefix}-p0-peak-rm.fits',
+            "angle" : f'{opts.prefix}-PA-pangle-at-peak-rm.fits',
+            "fpol" : f'{opts.prefix}-FPOL-at-center-freq.fits',
+            "rm" : f'{opts.prefix}-RM-depth-at-peak-rm.fits'
+        }
+
+        images = [map_names[_] for _ in "amp angle rm".split()]
+        
+        pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
+        pangle_data = rfu.read_image_cube(map_names["angle"])["data"]
+        pica_mask = pica_i_data.mask
+
+        stokes = {}
+        for cube in opts.cube_names:
+            stoke = os.path.basename(cube)[0]
+            stokes[stoke] = rfu.read_image_cube(cube)["data"]
+
+        stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
+        stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
+        
+        # plot lobes and their dispersion
+        plot_rm_for_lobes(
+            rot_meas_image=map_names["rm"],
+            e_mask=opts.elobe_mask, w_mask=opts.wlobe_mask,
+            vmin=-100, vmax=100, oup=opts.prefix, ref_image=opts.ref_image)
+
+
+        # plot fpol
+        plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix, mask=pica_mask,
+            ref_image=opts.ref_image)
+        
+        plot_polarised_intensity(
+            stokes["l_pol"], oup=opts.prefix, ref_image=opts.ref_image,
+            mask=pica_mask)
+
+        plot_intensity_vectors(
+            opts.ref_image, map_names["fpol"], map_names["angle"],
+            mask=opts.mask_name, oup=opts.prefix)
+
+
+        '''
+        Running this script with
+        
+        python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
+        '''
+
+    """
