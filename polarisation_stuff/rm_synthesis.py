@@ -219,8 +219,6 @@ def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gai
 
 
 def plot_data(lam, plam, phi, fphi):
-    
-    
     fig, (ax, ay) = plt.subplots(1, 2, figsize=(12, 5))
     ax.plot(lam, abs(plam), 'b.')
     ax.set_xlabel('Wavelength [m$^2$]')

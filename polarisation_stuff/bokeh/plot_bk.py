@@ -34,7 +34,7 @@ class Pol():
 
     @staticmethod
     def polarisation_angle(q, u):
-        return 0.5 * np.arctan(u/q)
+        return 0.5 *np.arctan2(u, q)
 
     @staticmethod
     def polarisation_angle_error(p, q, u, q_err, u_err):
@@ -62,6 +62,16 @@ class Pol():
     
     @staticmethod
     def fractional_pol_error(fpol, i, p, i_err, p_err):
+        """
+        fpol:
+            Fractional polarisation
+        i:
+            Total intensity
+        p:
+            Complex linear polaraised power
+        (i|p)_err
+            Error in I and p
+        """
         res = np.abs(fpol) * np.sqrt(np.square((p_err/p)) + np.square((i_err/i)))
         return res
 

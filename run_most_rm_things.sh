@@ -10,12 +10,31 @@ echo -e "In this same directory"
 echo -e "\n  1. Access to qu_pol from misc_tools_n_scripts/qu_pol";
 echo -e "  2. Access to plotting_bmaj_bmin.py from misc_tools_n_scripts/fits_related/";
 echo -e "  3. Images being worked on should be in this dirs' parent directory '../'\n";
+echo -e "  NOTE: PLEASE SUPPLY WHERE TO FIND YOUR MASSKSKSSSS!!!!!"
 echo -e "******************************************************";
+
+
+echo "To be run as:";
+echo -e "\t ./run_most_rm_things location/of/mask/dir";
+echo "e.g"
+echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks-572"
+echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks"
+
+echo -e "\n\nReading the mask dir"
+if [[ $1 = "" ]];
+then
+	echo "Mask dir not specified, I will use the default one";
+	export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
+	echo "Mask dir:  $mask_dir";
+else
+	echo "Mask dir:  $1";
+	export mask_dir=$1;
+fi
 
 
 
 # REference: https://devconnected.com/how-to-check-if-file-or-directory-exists-in-bash/
-echo "checking if the required scripts exist";
+echo -e"\nchecking if the required scripts exist";
 if [[ ! -f plotting_bmaj_bmin.py ]]
 then
 	echo "plotting_bmaj_bmin.py FILE does not exist. Creating";
@@ -29,12 +48,15 @@ then
 fi
 
 
-echo "Setting up variables, and the selection of channels";
-stokes="I Q U V";
-sel=("03" "04" "10" "11" "12" "13" "14" "15" "16" "17" "18" "19" "20" "42" "43" "44" "45" "46" "47" "48" "49" "50" "51" "52" "53" "54" "55" "60" "72" "73" "74");
+echo -e "\nSetting up variables, and the selection of channels";
+stokes="I Q U";
 
-#what to name the stuff: for the scrapper!
-data_suffix="circle-t0.05";
+echo -e "\n############################################################"
+echo "get the selected channels. Should be stored in a file called selected-channels"
+echo -e "############################################################\n"
+
+cp ../selected-channels.txt .
+sel=($(echo $(cat selected-channels.txt)))
 
 
 export orig_cubes="intermediates/original-cubes";
@@ -43,7 +65,6 @@ export conv_cubes="intermediates/conv-selection-cubes";
 export plots="intermediates/beam-plots";
 export prods="products";
 export spis="products/spi-fitting";
-export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
 
 echo -e "\n############################################################"
 echo "Make these directories";
@@ -67,7 +88,7 @@ for s in $stokes;
 		fi
 
 		echo "Plot the beams to identify which should be flagged";
-		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s
+		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s;
 	done;
 
 
@@ -135,13 +156,16 @@ python plotting_bmaj_bmin.py -c $conv_cubes/*-conv-image-cube.fits -o $plots/con
 echo -e "\n############################################################"
 echo "Delete the copied image files";
 echo -e "############################################################\n"
-rm *-[0-9][0-9][0-9][0-9]-*image.fits
+rm ./*-[0-9][0-9][0-9][0-9]-*image.fits
 
 
 
 echo -e "\n############################################################"
 echo "Generate various interesting LoS above some certain threshold";
 echo -e "############################################################\n"
+
+#what to name the stuff: for the scrapper!
+data_suffix="circle-t20";
 
 
 # I change region size from 5pix to 3 pixels
@@ -223,7 +247,7 @@ rename.ul -- ".convolved.fits" ".fits" $conv_cubes/* || true;
 echo -e "\n############################################################"
 echo "Delete the copied models and residuals";
 echo -e "############################################################\n" 
-rm *-model.fits *-residual.fits ;
+rm ./*-model.fits *-residual.fits ;
 
 
 

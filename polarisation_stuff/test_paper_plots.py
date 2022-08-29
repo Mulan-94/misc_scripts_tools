@@ -861,6 +861,10 @@ def run_paper_mill():
         f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
         f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
         f"{mask_dir}/true_mask.fits")
+    
+    print("----------------------------")
+    print("Paper mill stopped")
+    print("----------------------------")
 
 
 

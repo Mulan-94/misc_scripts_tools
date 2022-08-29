@@ -4,3 +4,17 @@ astropy
 python-casacore
 ipdb
 matplotlib
+
+
+#SETUP instructions for this environment 
+#+++++++++++++++++++++++++++++++++++++++++ 
+# see https://casa.nrao.edu/casadocs/casa-6.1.0/imaging/image-analysis/image-selection-parameters
+pip install --index-url https://casa-pip.nrao.edu/repository/pypi-casa-release/simple casatools 
+pip install --index-url https://casa-pip.nrao.edu/repository/pypi-casa-release/simple casatasks
+python3 -m casatools --update-user-data
+matplotlib
+numpy
+scipy
+astropy
+ipdb
+ipython

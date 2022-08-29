@@ -242,7 +242,6 @@ def main():
     qdata, qhdr = read_data(args.qfits) # run Q-cube 
     udata, uhdr = read_data(args.ufits) # run U-cube
 
-
     pdata = qdata + 1j*udata
 
     if args.ifits:

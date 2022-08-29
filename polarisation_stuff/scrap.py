@@ -37,25 +37,31 @@ light_speed = 3e8
 marker_size = 10
 FPOL_FILTER = []
 
+
+def configure_logger(out_dir):
 # ignore overflow errors, assume these to be mostly flagged data
-warnings.simplefilter("ignore")
+    warnings.simplefilter("ignore")
 
-formatter = logging.Formatter(
-    datefmt='%H:%M:%S %d.%m.%Y',
-    fmt="%(asctime)s : %(levelname)s - %(message)s")
-l_handler = logging.FileHandler("xcrapping.log", mode="w")
-l_handler.setLevel(logging.WARNING)
-l_handler.setFormatter(formatter)
+    formatter = logging.Formatter(
+        datefmt='%H:%M:%S %d.%m.%Y',
+        fmt="%(asctime)s : %(levelname)s - %(message)s")
+    
+    _ = IOUtils.make_out_dir(out_dir)
+    l_handler = logging.FileHandler(
+        os.path.join(out_dir, "xcrapping.log"), mode="w")
+    l_handler.setLevel(logging.WARNING)
+    l_handler.setFormatter(formatter)
 
-s_handler = logging.StreamHandler()
-s_handler.setLevel(logging.INFO)
-s_handler.setFormatter(formatter)
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.INFO)
+    s_handler.setFormatter(formatter)
 
-snitch = logging.getLogger(__name__)
-snitch.setLevel(logging.INFO)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
 
-snitch.addHandler(l_handler)
-snitch.addHandler(s_handler)
+    logger.addHandler(l_handler)
+    logger.addHandler(s_handler)
+    return logger
 
 
 def timer(func):
@@ -205,10 +211,15 @@ class IOUtils:
             data = fits.getdata(f"{im}-mfs.fits").squeeze()
 
             data = np.ma.masked_less(np.abs(data), noise*threshold)
+            ylims, xlims = np.where(data.mask == False)
+            wiggle = 20
+            
             ax[_].imshow(np.log(data), origin="lower", cmap="coolwarm")                
             ax[_].set_title(im)
-            ax[_].set_xlim(1800, 2400)
-            ax[_].set_ylim(1850, 2250)
+            # ax[_].set_xlim(1800, 2400)
+            # ax[_].set_ylim(1850, 2250)
+            ax[_].set_xlim(np.min(xlims)-wiggle, np.max(xlims)+wiggle)
+            ax[_].set_ylim(np.min(ylims)-wiggle, np.max(ylims)+wiggle)
 
             for choice in chosen:
                 x,y,r = np.array(np.round([*choice.center.xy, choice.radius]),dtype=int)
@@ -218,7 +229,12 @@ class IOUtils:
         fig.tight_layout()
         oname = os.path.join(
             os.path.dirname(regfile),
-            f"iqu-data-above-noise-comparison-t{int(threshold)}-r{r}.svg")
+            f"iqu-data-above-noise-plot-t{int(threshold)}-r{r}.png")
+
+        if os.path.isdir(oname):
+            name, ext = os.path.splitext(oname)
+            oname = name + "-a" + ext
+
         plt.savefig(oname, dpi=400)
         snitch.info(oname)
 
@@ -1036,6 +1052,7 @@ def parser():
 
 if __name__ == "__main__":
     opts = parser().parse_args()
+    snitch = configure_logger(opts.output_dir)
     
     if opts.testing is None:
         testing = ""
@@ -1104,10 +1121,10 @@ if __name__ == "__main__":
                 global_noise = FitsManip.get_noise(noise_reg, opts.wcs_ref, data=None)
 
             # generate region files only so end the loop. On to the next one
+            IOUtils.overlay_regions_on_source_plot(
+                    reg_file, opts.wcs_ref, global_noise, opts.thresh)
             if opts.r_only:
                 snitch.warning("Generated regions only as per request")
-                IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, global_noise, opts.thresh)
                 continue
             
             snitch.warning(f"Noise is        : {global_noise}")
