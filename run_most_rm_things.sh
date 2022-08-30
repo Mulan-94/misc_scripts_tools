@@ -20,7 +20,9 @@ echo "e.g"
 echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks-572"
 echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks"
 
-echo -e "\n\nReading the mask dir"
+echo -e "\n############################################################"
+echo -e "Reading the mask dir"
+echo -e "############################################################\n"
 if [[ $1 = "" ]];
 then
 	echo "Mask dir not specified, I will use the default one";
@@ -32,9 +34,12 @@ else
 fi
 
 
+echo -e "\n############################################################"
+echo -e "checking if the required scripts exist";
+echo -e "############################################################\n"
 
 # REference: https://devconnected.com/how-to-check-if-file-or-directory-exists-in-bash/
-echo -e"\nchecking if the required scripts exist";
+
 if [[ ! -f plotting_bmaj_bmin.py ]]
 then
 	echo "plotting_bmaj_bmin.py FILE does not exist. Creating";
@@ -48,8 +53,12 @@ then
 fi
 
 
-echo -e "\nSetting up variables, and the selection of channels";
+echo -e "\n############################################################"
+echo -e "Setting up variables, and the selection of channels";
+echo -e "############################################################\n"
+
 stokes="I Q U";
+
 
 echo -e "\n############################################################"
 echo "get the selected channels. Should be stored in a file called selected-channels"
