@@ -55,7 +55,10 @@ echo -e "\n############################################################"
 echo "get the selected channels. Should be stored in a file called selected-channels"
 echo -e "############################################################\n"
 
-cp ../selected-channels.txt .
+if [[ ! -f selected-channels.txt ]]
+then
+	cp ../selected-channels.txt .
+fi
 sel=($(echo $(cat selected-channels.txt)))
 
 
@@ -86,10 +89,13 @@ for s in $stokes;
 			images=$(ls ../*-[0-9][0-9][0-9][0-9]-$s-residual.fits);
 			fitstool.py --stack=$orig_cubes/${s,,}-residual-cube.fits:FREQ $(echo $images);
 		fi
-
-		echo "Plot the beams to identify which should be flagged";
-		python plotting_bmaj_bmin.py -c $orig_cubes/${s,,}-cube.fits -o $plots/orig-bmaj-bmin-$s;
 	done;
+
+
+echo -e "\n############################################################"
+echo "Plot the beams to identify which should be flagged";
+echo -e "############################################################\n"
+python plotting_bmaj_bmin.py -c $orig_cubes/i-cube.fits -o $plots/orig-bmaj-bmin-i;
 
 
 echo -e "\n############################################################"
@@ -97,7 +103,7 @@ echo "copy relevant channels' images to this folder for IQUV";
 echo -e "############################################################\n"
 for n in ${sel[@]};
 	do
-		cp ../*-[0-9][0-9]$n-*-*image* .;
+		cp ../*-$n-{I,Q,U}-*image* .;
 	done
 
 
@@ -112,7 +118,7 @@ cp ../*MFS-U-image.fits u-mfs.fits
 echo -e "\n############################################################"
 echo "Save the names of the selected images. Simpleton workaround for using cubes in the scap.py script :("
 echo -e "############################################################\n"
-ls *-[0-9][0-9][0-9][0-9]*-image.fits >> selected-freq-images.txt
+ls *-[0-9][0-9][0-9][0-9]*-image.fits > selected-freq-images.txt
 
 #Replacing all begins of strings here with ../
 sed -i 's/^/\.\.\//g' selected-freq-images.txt
@@ -146,10 +152,24 @@ for s in $stokes;
 		spimple-imconv -image $sel_cubes/${s,,}-image-cube.fits -o $conv_cubes/${s,,}-conv-image-cube ;
 	done
 
+
+echo -e "\n############################################################"
+echo "Plot the beams of selected channels to see if they make sense";
+echo -e "############################################################\n"
+python plotting_bmaj_bmin.py -c $sel_cubes/i-image-cube.fits -o $plots/selected-bmaj-bmin-i;
+
+
+
+echo -e "\n############################################################"
 echo "Renaming output file from spimple because the naming here is weird";
+echo -e "############################################################\n"
 rename.ul -- ".convolved.fits" ".fits" $conv_cubes/* ;
 
+
+
+echo -e "\n############################################################"
 echo "Just check if the beam sizes are the same";
+echo -e "############################################################\n"
 python plotting_bmaj_bmin.py -c $conv_cubes/*-conv-image-cube.fits -o $plots/conv-bmamin;
 
 
@@ -212,8 +232,11 @@ echo -e "############################################################\n"
 # For selection with LS using or patterns
 # https://unix.stackexchange.com/questions/50220/using-or-patterns-in-shell-wildcards
 
-# copy I residuals and models of the selected channels
-cp ../*-00{03,04,10,11,12,13,14,15,16,17,18,19,20,42,43,44,45,46,47,48,49,50,51,52,53,54,55,60,72,73,74}-I-{residual,model}.fits .
+
+for n in ${sel[@]};
+	do
+		cp ../*-$n-I-{residual,model}* .;
+	done
 
 
 echo -e "\n############################################################"
@@ -223,7 +246,7 @@ echo -e "############################################################\n"
 # Get wsums for the selected images with commas
 # echo $(fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g") | sed "s/ /,/g"
 
-fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g" >> wsums.txt
+fitsheader *I-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g" > wsums.txt
 
 
 
@@ -247,7 +270,7 @@ rename.ul -- ".convolved.fits" ".fits" $conv_cubes/* || true;
 echo -e "\n############################################################"
 echo "Delete the copied models and residuals";
 echo -e "############################################################\n" 
-rm ./*-model.fits *-residual.fits ;
+rm ./*-{model,residual}.fits ;
 
 
 
