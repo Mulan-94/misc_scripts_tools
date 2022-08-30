@@ -26,6 +26,7 @@ warnings.filterwarnings("ignore", module="astropy")
 
 FIGSIZE = (16,9)
 EXT = ".svg"
+DPI = 600
 
 def set_image_projection(image_obj):
     """
@@ -219,17 +220,21 @@ class PaperPlots:
             snd.gaussian_filter(data, sigma=smooth_sigma),
             colors="g", linewidths=0.5, origin="lower", levels=levels)
 
-        ax.imshow(data, origin="lower", cmap="magma", vmin=0, vmax=.127, aspect="equal")
+        cs = ax.imshow(data, origin="lower", cmap="coolwarm", vmin=0, vmax=.127,
+                        aspect="equal")
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0)
     
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
         
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
     
@@ -272,7 +277,7 @@ class PaperPlots:
         plt.legend()
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
     
@@ -329,7 +334,7 @@ class PaperPlots:
         plt.legend()
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
     
@@ -360,8 +365,9 @@ class PaperPlots:
         ax = set_image_projection(ax)
 
 
-        cs = ax.imshow(data, origin="lower", cmap="coolwarm_r", vmin=-1.7, vmax=-0.5, aspect="equal")
-        plt.colorbar(cs, label="Spectral Index")
+        cs = ax.imshow(data, origin="lower", cmap="coolwarm_r", vmin=-1.7,
+                    vmax=-0.5, aspect="equal")
+        plt.colorbar(cs, label="Spectral Index", pad=0)
 
         # the image data
         levels = contour_levels(start, intensity)
@@ -374,10 +380,12 @@ class PaperPlots:
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
         
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
 
@@ -446,7 +454,7 @@ class PaperPlots:
             cmap="coolwarm", origin="lower", levels=levels,
             locator=ticker.LogLocator())
 
-        plt.colorbar(cs, label="Total Intensity")
+        plt.colorbar(cs, label="Total Intensity", pad=0)
 
         #################################
         skip = 5
@@ -480,10 +488,12 @@ class PaperPlots:
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
         
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
 
@@ -541,7 +551,8 @@ class PaperPlots:
 
 
         cs = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
-        plt.colorbar(cs, label="Degree of polarisation [Fractional Polarisation]")
+        plt.colorbar(cs, label="Degree of polarisation [Fractional Polarisation]",
+            pad=0)
 
         
         ax.tick_params(axis="x", top=False)
@@ -549,10 +560,11 @@ class PaperPlots:
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
-        
+        fig.canvas.draw()
+        fig.tight_layout()
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
 
@@ -598,26 +610,89 @@ class PaperPlots:
 
         wcs = rfu.read_image_cube(mask)["wcs"]
 
-        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs},
+                    )
         ax = set_image_projection(ax)
 
         
         cs = ax.imshow(lpol, origin="lower", cmap="coolwarm", aspect="equal",
-        # norm=LogNorm(vmin=0.005, vmax=0.05)
-        vmin=0.005, vmax=0.05
-        )
-        plt.colorbar(cs, label="Linear Polarisation Power |P|")
+                # norm=LogNorm(vmin=0.005, vmax=0.05)
+                vmin=0.005, vmax=0.05
+                )
+        plt.colorbar(cs, label="| P |", pad=0)
         
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
         
         print(f"Saving plot: {output}")
-        
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
+
+
+    @staticmethod
+    def figure_rm_map(intensity, rm_map, mask, start=0.004, smooth_sigma=1,
+        output="rm-map.png"):
+        """
+        # Degree of polzn lines vs contours
+        # we're not using cubes, we use the MFS images
+        """
+        intensity = rfu.get_masked_data(intensity, mask)
+
+        if isinstance(rm_map, str):
+            rm_data = rfu.get_masked_data(rm_map, mask)
+        else:
+            rm_data = rm_map
+        
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = rm_data.mask
+
+        if  not np.ma.is_masked(rm_data):
+            rm_data = np.ma.masked_array(rm_data, mask=mask_data)
+ 
+        mask_data = rm_data.mask
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 70
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        
+        cs = ax.imshow(rm_data, origin="lower", cmap="coolwarm", aspect="equal",
+        vmin=30, vmax=80
+        )
+
+        # the image data
+        levels = contour_levels(start, intensity)
+        ax.contour(intensity,
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+
+        plt.colorbar(cs, label="Rotation Measure", pad=0)
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
+        
+        print(f"Saving plot: {output}")
+        plt.savefig(output, dpi=DPI)
+        plt.close("all")
+
 
 
     @staticmethod
@@ -669,7 +744,8 @@ class PaperPlots:
             colors="k", linewidths=0.5, origin="lower", levels=levels)
 
         cs = ax.imshow(depoln, origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
-        plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]")
+        plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]",
+            pad=0)
 
         
         ax.tick_params(axis="x", top=False)
@@ -677,10 +753,12 @@ class PaperPlots:
 
         plt.xlim(*xlims)
         plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
         
         print(f"Saving plot: {output}")
         
-        plt.savefig(output, dpi=200)
+        plt.savefig(output, dpi=DPI)
         plt.close("all")
 
     
@@ -728,8 +806,8 @@ class PaperPlots:
             rm_lobes, origin="lower", cmap="coolwarm", vmin=30,
             vmax=80, aspect="equal")
         
-        plt.colorbar(ca, location="right", shrink=0.90, pad=0.01,
-            label="RM", drawedges=False)
+        plt.colorbar(ca, location="right", shrink=0.90,
+            label="RM", drawedges=False, pad=0)
 
         levels = contour_levels(start, intensity)
         image.contour(
@@ -769,7 +847,7 @@ class PaperPlots:
         east_hist.set_xlim(-200, 200)
         west_hist.set_ylim(-200, 200)
 
-        fig.tight_layout()
+        # fig.tight_layout()
         fig.savefig(output)
         print(f"Output is at: {output}")
 
@@ -813,12 +891,14 @@ def run_paper_mill():
     mask_dir = os.environ["mask_dir"]
     products = os.environ["prods"]
 
+    mask = f"{mask_dir}/true_mask.fits"
+
+    rm_map = os.path.join(products, "initial-RM-depth-at-peak-rm.fits")
+
     for o_dir in ["fig4", "fig8", "fig9", "fig10"]:
         if not os.path.isdir(o_dir):
             os.mkdir(o_dir)
 
-
-    mask = f"{mask_dir}/true_mask.fits"
 
     idata = rfu.read_image_cube(cubes[0])["data"]
     qdata = rfu.read_image_cube(cubes[1])["data"]
@@ -861,6 +941,9 @@ def run_paper_mill():
         f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
         f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
         f"{mask_dir}/true_mask.fits")
+
+    PaperPlots.figure_rm_map(
+        imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
     
     print("----------------------------")
     print("Paper mill stopped")
