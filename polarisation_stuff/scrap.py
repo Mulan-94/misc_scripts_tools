@@ -1143,8 +1143,13 @@ if __name__ == "__main__":
                 for _ in fpol_filter:
                     # coz list indexing starts from 0
                     del edited[int(_.split("_")[-1]) + 2]
+
+                edited = list(edited.values)
+                for _, _x in enumerate(edited[3:], 3):
+                     edited[_] = edited[_].split("#")[0] + f"# {_-2},los\n"
+
                 with open(reg_file, "w") as fname:
-                    fname.writelines(edited.values())
+                    fname.writelines(edited)
                 
                 IOUtils.overlay_regions_on_source_plot(
                     reg_file, opts.wcs_ref, global_noise, opts.thresh)

@@ -203,11 +203,26 @@ python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --thres
 
 
 echo -e "\n############################################################"
+echo "Renaming regions to match their associated remaining numbers";
+echo -e "############################################################\n"
+
+cd $prods/scrap-outputs/*$data_suffix/
+regnum=1
+for n in $(ls * | sort -V);
+    do
+        echo "$n >> reg_$regnum.npz";
+        mv $n reg_$regnum.npz;
+        regnum=$(( regnum + 1 ));
+    done
+cd $OLDPWD;
+
+
+
+echo -e "\n############################################################"
 echo "Edit the reg file in a way that it can be loaded into CARTA"
 echo -e "############################################################\n"
 
 sed -i "s/text=.*//g" $prods/scrap-outputs/regions/beacons*.reg
-
 
 
 echo -e "\n############################################################"
