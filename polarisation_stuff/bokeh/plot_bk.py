@@ -288,7 +288,7 @@ if __name__ == "__main__":
             # for each LOS, read its data and plot it
             for los in glob(f"{i_dir}/*npz"):
                 reg = os.path.splitext(os.path.basename(los))[0]
-                depth_dir = os.path.dirname(los) + "-depths"
+                depth_dir = glob(os.path.dirname(los) + "-depths*")[0]
 
                 # read line of sight data wavelengths
                 los_data = read_data(los)

@@ -194,7 +194,7 @@ echo "Generate various interesting LoS above some certain threshold";
 echo -e "############################################################\n"
 
 #what to name the stuff: for the scrapper!
-data_suffix="circle-t20";
+export data_suffix="circle-t20";
 
 
 # I change region size from 5pix to 3 pixels
