@@ -11,7 +11,7 @@ from casatasks import imstat
 from glob import glob
 import scipy.ndimage as snd
 
-from matplotlib.colors import LogNorm
+from matplotlib import colors
 
 import sys
 import os
@@ -195,6 +195,104 @@ def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
 
 class PaperPlots:
 
+    @staticmethod
+    def figure_3_total_and_jets(image, mask, jet_mask, start=0.004, vmin=0,
+            vmax=2, scale="linear", cmap="magma",
+            output="3-total-intensity", kwargs={}):
+        
+        plt.close("all")
+        """
+        image:
+            The data without masking. Will be zoomed in anyway]
+        """
+        scaling = {
+            "linear": colors.Normalize,
+            "log": colors.LogNorm,
+            "symmetric": colors.SymLogNorm,
+            "centered": colors.CenteredNorm,
+            "power": colors.PowerNorm
+        }
+        wcs = rfu.read_image_cube(image)["wcs"]
+        pictor = rfu.get_masked_data(image, mask)
+        mask = pictor.mask
+
+        jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
+
+        levels = contour_levels(start, pictor)
+
+        wiggle = 20
+        y, x = np.where(mask == False)
+        jy, jx = np.where(jet_mask == False)
+        
+        
+        xr = np.min(x)-wiggle, np.max(x)+wiggle
+        yr = np.min(y)-wiggle, np.max(y)+wiggle
+
+        # jet limits
+        jxr = np.min(jx)-wiggle, np.max(jx)+wiggle
+        jyr = np.min(jy)-wiggle, np.max(jy)+wiggle
+
+        use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)
+
+
+        ######################################################################
+        # Plotting the Total intesity WITHOUT contours
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
+        ax.set_xlim(*xr)
+        ax.set_ylim(*yr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving total intensity image at:   "+ output)
+        fig.savefig(output+".png", dpi=DPI)
+        
+
+        ######################################################################
+        # Plotting the Total intesity with contours
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(pictor, colors="g", linewidths=1, origin="lower", levels=levels)
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
+        ax.set_xlim(*xr)
+        ax.set_ylim(*yr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving total intensity image at:   "+ output+"-cont")
+        fig.savefig(output+"-cont.png", dpi=DPI)
+
+
+        ######################################################################
+        # Plotting the jets now
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(pictor, colors="g", linewidths=1, origin="lower", levels=levels)
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
+            location="top", shrink=1, fraction=0.15)
+        ax.set_xlim(*jxr)
+        ax.set_ylim(*jyr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving jet image at:               "+ output)
+        fig.savefig(output+"-jet.png", dpi=DPI)
+        return
+
+    
     @staticmethod
     def figure_4b(image, mask, start=0.004, smooth_sigma=13,
         output="4b-intensity-contours.png"):
@@ -616,7 +714,7 @@ class PaperPlots:
 
         
         cs = ax.imshow(lpol, origin="lower", cmap="coolwarm", aspect="equal",
-                # norm=LogNorm(vmin=0.005, vmax=0.05)
+                # norm=colors.LogNorm(vmin=0.005, vmax=0.05)
                 vmin=0.005, vmax=0.05
                 )
         plt.colorbar(cs, label="| P |", pad=0)
@@ -670,9 +768,8 @@ class PaperPlots:
         ax = set_image_projection(ax)
 
         
-        cs = ax.imshow(rm_data, origin="lower", cmap="coolwarm", aspect="equal",
-        vmin=30, vmax=80
-        )
+        cs = ax.imshow(rm_data, origin="lower", cmap="coolwarm", 
+            aspect="equal", vmin=30, vmax=80)
 
         # the image data
         levels = contour_levels(start, intensity)
@@ -692,7 +789,6 @@ class PaperPlots:
         print(f"Saving plot: {output}")
         plt.savefig(output, dpi=DPI)
         plt.close("all")
-
 
 
     @staticmethod
@@ -723,7 +819,7 @@ class PaperPlots:
         fpol = np.ma.masked_less(fpol, 0)
 
 
-        fpol = np.ma.masked_array(fpol.data, mask=np.logical_or(fpol.mask, mask_data))
+        fpol = np.ma.masked_array(fpol, mask=np.logical_or(fpol.mask, mask_data))
 
         depoln = fpol[0]/fpol[-1]
 
@@ -892,17 +988,17 @@ def run_paper_mill():
     products = os.environ["prods"]
 
     mask = f"{mask_dir}/true_mask.fits"
+    jet_mask = f"{mask_dir}/jet.fits"
 
     rm_map = os.path.join(products, "initial-RM-depth-at-peak-rm.fits")
-
-    for o_dir in ["fig4", "fig8", "fig9", "fig10"]:
-        if not os.path.isdir(o_dir):
-            os.mkdir(o_dir)
-
 
     idata = rfu.read_image_cube(cubes[0])["data"]
     qdata = rfu.read_image_cube(cubes[1])["data"]
     udata = rfu.read_image_cube(cubes[2])["data"]
+
+    for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
+        if not os.path.isdir(o_dir):
+            os.mkdir(o_dir)
 
 
     PaperPlots.table2(cubes[0], region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
@@ -912,6 +1008,19 @@ def run_paper_mill():
     PaperPlots.figure_9a(*imgs, mask)
     PaperPlots.figure_10(*imgs[1:], mask)
     PaperPlots.figure_14(imgs[0], *cubes, mask)
+
+
+    PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
+        output="fig3/total-intensity-max2", 
+        vmin=0, vmax=2, scale="linear", cmap="magma")
+
+    PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
+        output="fig3/total-intensity-max-1e-1", 
+        vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
+
+    PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
+        output="fig3/total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+        scale="power", cmap="magma", kwargs={"gamma": 3.8})
 
 
     images = {
@@ -927,14 +1036,7 @@ def run_paper_mill():
         f"{products}/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
         output="5b-spi-with-contours-mpl.png")
 
-    for _ in range(idata.shape[0]):
-        PaperPlots.figure_8(
-            idata[_], qdata[_], udata[_], mask, output=f"fig8/poln{_}.png")
-        PaperPlots.figure_9a(
-            idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
-        PaperPlots.figure_10(
-            qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
-
+    
     # Lobe stuff
     PaperPlots.figure_12_13(
         imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
@@ -944,7 +1046,16 @@ def run_paper_mill():
 
     PaperPlots.figure_rm_map(
         imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
+
     
+    for _ in range(idata.shape[0]):
+        PaperPlots.figure_8(
+            idata[_], qdata[_], udata[_], mask, output=f"fig8/poln{_}.png")
+        PaperPlots.figure_9a(
+            idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
+        PaperPlots.figure_10(
+            qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
+
     print("----------------------------")
     print("Paper mill stopped")
     print("----------------------------")
@@ -959,7 +1070,7 @@ def contour_levels(start, data):
     levels = np.ma.masked_greater(levels, np.nanmax(data)).compressed()
     return levels
 
-
+'''
 def add_contours(axis, data, levels=None):
     """
     contours: total intensity
@@ -1146,6 +1257,7 @@ def make_masks_from_ricks_data():
     ax[1].hlines(280, 0, 571)
     # plt.show()
 
+'''
 
 def parser():
     ps = argparse.ArgumentParser(
