@@ -198,7 +198,7 @@ export data_suffix="circle-t20";
 
 
 # I change region size from 5pix to 3 pixels
-python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --threshold 20 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits
+python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --threshold 10 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits
 
 
 

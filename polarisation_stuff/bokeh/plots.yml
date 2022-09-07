@@ -1,7 +1,7 @@
 # Available data products for use
 # 'power', 'fpol', 'lpol', 'angle', 'stokes', 'lambda_sq', 'angle_err'
 # 'power_err', 'fpol_err', 'q_err', 'u_err', 'depths', 'fdirty'
-# 'fclean', 'rmsf'
+# 'fclean', 'rmtf'
 # Can be used with the xdata, ydata, x_error, y_error keys
 # If the above keys are not supplied, data will be inferred from the plot name
 
@@ -167,8 +167,8 @@ fdirty:
       color: IMAG_COLOUR
       visible: false
 
-rmsf:
-  title: RMSF
+rmtf:
+  title: RMTF
   x_label: Faraday depth
   y_label: Polarised flux
   x: depths

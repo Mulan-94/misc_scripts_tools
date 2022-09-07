@@ -122,7 +122,6 @@ class IOUtils:
         regs = Regions.read(reg_file, format="ds9").regions
         for _, reg in enumerate(regs):
             regs[_] = regs[_].to_pixel(wcs)
-
         return regs
 
     @classmethod
@@ -211,27 +210,29 @@ class IOUtils:
             data = fits.getdata(f"{im}-mfs.fits").squeeze()
 
             data = np.ma.masked_less(np.abs(data), noise*threshold)
-            ylims, xlims = np.where(data.mask == False)
-            wiggle = 20
+
+            lims = np.array([_.center.xy for _ in regs], dtype=int)
+            xmin, ymin = np.min(lims, axis=0)
+            xmax, ymax = np.max(lims, axis=0)
+            wiggle = 50
             
             ax[_].imshow(np.log(data), origin="lower", cmap="coolwarm")                
             ax[_].set_title(im)
-            # ax[_].set_xlim(1800, 2400)
-            # ax[_].set_ylim(1850, 2250)
-            ax[_].set_xlim(np.min(xlims)-wiggle, np.max(xlims)+wiggle)
-            ax[_].set_ylim(np.min(ylims)-wiggle, np.max(ylims)+wiggle)
+            ax[_].set_xlim(xmin-wiggle, xmax+wiggle)
+            ax[_].set_ylim(ymin-wiggle, ymax+wiggle)
 
             for choice in chosen:
                 x,y,r = np.array(np.round([*choice.center.xy, choice.radius]),dtype=int)
                 ax[_].add_patch(plt.Circle((x,y), radius=r, color="indigo", fill=False, lw=0.5))
 
-        fig.suptitle(f"thresh x noise: {threshold} x {noise:.6f} = {threshold*noise:.6f}, log scale")
+        fig.suptitle(f"thresh x noise: {threshold} x {noise:.6f} = {threshold*noise:.6f}, log scale\n"+
+            "Showing only data above this")
         fig.tight_layout()
         oname = os.path.join(
             os.path.dirname(regfile),
             f"iqu-data-above-noise-plot-t{int(threshold)}-r{r}.png")
 
-        if os.path.isdir(oname):
+        if os.path.isfile(oname):
             name, ext = os.path.splitext(oname)
             oname = name + "-a" + ext
 
@@ -669,14 +670,24 @@ class MathUtils:
         return frac_pol
     
     @classmethod
-    def fractional_polzn_error(stokes_i, stokes_q, stokes_u, i_err, q_err, u_err):
-        fpol = cls.fractional_plzn(stokes_i, stokes_q, stokes_u)
+    def fractional_polzn_error(cls, stokes_i, stokes_q, stokes_u, i_err, q_err, u_err):
+        fpol = cls.fractional_polzn(stokes_i, stokes_q, stokes_u)
         p = cls.linear_polzn_power(stokes_q, stokes_u)
         p_err = cls.linear_polzn_power_error(p, stokes_q, stokes_u, q_err, u_err)
         res = np.abs(fpol) * np.sqrt(np.square((p_err/p)) + np.square((i_err/stokes_i)))
         return res
+    
+    @staticmethod
+    def polarisation_angle(q, u):
+        return 0.5 *np.arctan2(u, q)
 
     @staticmethod
+    def polarisation_angle_error(p, q, u, q_err, u_err):
+        "See A.11 Brentjens"
+        err = (np.square(u*q_err) + np.square(q*u_err)) / (4 * p**4)
+        return np.rad2deg(np.sqrt(err))
+
+    @classmethod
     def lambda_sq(freq_ghz):
         #speed of light in a vacuum
         global light_speed
@@ -804,13 +815,19 @@ class FitsManip:
         data = im_data.pop("data")
 
         image_noise = cls.get_noise(noise_reg, fname, data=data)
+        global_noise = global_noise[im_data["stokes"].lower()]
         
         # Get mean flux over the pixels
         intense_cut = cls.get_data_cut(reg, data)
 
-
+        """
+        Check if all values are 
+        - nans
+        - zeros
+        - if the noise is infinite
+        """
         if (MathUtils.are_all_nan(intense_cut) or MathUtils.are_all_zeroes(intense_cut) or
-            MathUtils.is_infinite(global_noise)):
+            MathUtils.is_infinite(image_noise)):
             # skip all the nonsence if all the data is Nan
             snitch.debug(f"Skipping region:{reg.meta['text']} {fname} because NaN/Zeroes/inf ")
             # im_data["flux_jybm"] = im_data["flux_jy"] = None
@@ -821,13 +838,17 @@ class FitsManip:
         cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
         flux_jybm = intense_cut[cpixx, cpixy]
 
-        if (np.abs(flux_jybm) > sig_factor * global_noise):
+        if (np.abs(flux_jybm) > sig_factor * image_noise):
             im_data["flux_jybm"] = flux_jybm
         else:
             im_data["flux_jybm"] = None
     
+        
         im_data["noise"] = global_noise
         im_data["image_noise"] = image_noise
+
+        # Noting here that individual image noise is always > the MFS noise
+        # snitch.warning(f"image noise > global nose: {image_noise > global_noise}")
         return im_data
 
     @staticmethod
@@ -853,6 +874,7 @@ class FitsManip:
             flux = None
         return flux
 
+ 
     @staticmethod
     def get_data_cut(reg, data):
         """
@@ -902,21 +924,34 @@ class FitsManip:
                 outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
+                # global noise i.e from respective stoke Mfs image
                 outs[res["stokes"]]["noise"].append(res["noise"])
+                # noise for this specific image
                 outs[res["stokes"]]["image_noise"].append(res["image_noise"])
-    
+
             checks = [outs.get(k)["flux_jybm"] for k in "IQU"][0]
 
             if not all(_ is None for _ in checks):
                 # contains I, Q, U, noise, freqs, fpol, lpol
                 fout = {k: np.asarray(v["flux_jybm"], dtype=np.float) for k,v in outs.items()}
-                fout.update({v: outs["I"][v] for v in ["noise", "freqs"]})
+                fout["freqs"] = outs["I"]["freqs"]
+                fout.update({f"{k}_mfs_noise".lower(): outs[k]["noise"] for k in "IQU"})
                 fout.update({f"{v}_err": outs[v]["image_noise"] for v in "IQU"})
                 
                 fout["lpol"] = MathUtils.linear_polzn(fout["Q"], fout["U"])
+                fout["lpol_err"] = MathUtils.linear_polzn_power_error(
+                    fout["lpol"], fout["Q"], fout["U"],
+                    fout["Q_err"], fout["U_err"])
+
 
                 fout["fpol"] = MathUtils.fractional_polzn(fout["I"], fout["Q"],
                     fout["U"])
+                fout["fpol_err"] = MathUtils.fractional_polzn_error(fout["I"],
+                    fout["Q"], fout["U"], fout["I_err"], fout["Q_err"], fout["U_err"])
+
+                fout["pangle"] = MathUtils.polarisation_angle(fout["Q"], fout["U"])
+                fout["pangle_err"] = MathUtils.polarisation_angle_error(
+                    fout["pangle"], fout["Q"], fout["U"], fout["Q_err"], fout["U_err"])
 
                 # creating mask where ll values where fractional polz > 1 or <0
                 mask = np.ma.masked_where(
@@ -924,11 +959,7 @@ class FitsManip:
                             (fout["fpol"]<0) | 
                             (np.isnan(fout["fpol"])),
                         fout["fpol"] ).mask
-
-                for key, value in fout.items():
-                    # we remove all the masked items. Can do this because
-                    # mask for all items is the same
-                    fout[key] = np.ma.masked_array(data=value, mask=mask).compressed()
+                fout["mask"] = mask
 
                 # if not all data is flagged and flagged data is less than 50%
                 if mask.sum() != mask.size and (mask.sum()<mask.size*0.5):
@@ -943,6 +974,8 @@ class FitsManip:
                         f"{reg.meta['text']}: flagged {mask.sum()}/{mask.size} points. " + 
                         "Skipping because >50% flagged, or not enough data.")
                     FPOL_FILTER.append(reg.meta['text'])
+            else:
+                snitch.warning(f"Skipping because there's no valid data in this region.")
             
         snitch.info(f"Done saving data files")
         snitch.info( "--------------------")
@@ -1010,8 +1043,21 @@ def parser():
         type=str, default=None,
         help="Testing affixation. Will be Prepended with '-'. Default name is IQU something")
     opt_parsing.add_argument("--noise", dest="noise", metavar="", type=float,
-        default=None,
-        help="Noise value above which to extract. Default is automatically determined.")
+        default=None, nargs="+",
+        help="""
+        Noise value above which to extract. If a single value is provided, this 
+        will be the same noise used for the I, Q, and U images. If you wish to use
+        different noise for each image, give this in three separated values.
+        The Default values will be calculated from the (I|Q|U)MFS-images. 
+        Must be in the order of I Q U.
+        """)
+    opt_parsing.add_argument("-nrfs", "--noise-refs", dest="nrfs", metavar="",
+        default=["i-mfs.fits", "q-mfs.fits", "u-mfs.fits"], type=str, nargs="+",
+        help="""The IQU images to use as noise refernces. If not supplied, this script
+        will use the available (I|Q|U)-mfs images it finds. Must be in the order
+        I Q U.
+        """
+    )
     
     
     #plotting arguments
@@ -1086,6 +1132,7 @@ if __name__ == "__main__":
             start = perf_counter()
             file_core = f"regions-mpc-{factor}{testing}"
             images = IOUtils.read_sorted_filnames(opts.in_list)
+            nrfs = sorted(opts.nrfs)
             
             if opts.reg_file:
                 reg_file = opts.reg_file
@@ -1100,7 +1147,8 @@ if __name__ == "__main__":
                 # because not user specified, I can edit however I want
                 # will use the wcs ref as where to determin noise
                 # this must be the I-MFS image
-                IOUtils.write_valid_regions(reg_file, fname=opts.wcs_ref,
+                snitch.warning(f"Using the noise from :   {nrfs[0]} to generate regions")
+                IOUtils.write_valid_regions(reg_file, fname=nrfs[0],
                     threshold=opts.thresh, overwrite=opts.noverwrite)
 
             
@@ -1112,24 +1160,33 @@ if __name__ == "__main__":
             snitch.info(f"And {len(images)} images ({len(images)//3} X IQU)")
 
             if opts.noise:
-                global_noise = opts.noise
+                global_noise = [opts.noise]*3 if len(opts.noise)==1 else opts.noise
+                global_noise = {_i: _n for _i, _n in zip("iqu", global_noise)}
             else:
                 noise_reg, = IOUtils.read_region_as_pixels(
                     os.path.join(os.path.dirname(reg_file), "noise_area.reg"),
                     ref_wcs)
-                snitch.info(f"Getting noise from {opts.wcs_ref}")
-                global_noise = FitsManip.get_noise(noise_reg, opts.wcs_ref, data=None)
+                snitch.info(f"Getting RMS noise(s) from {', '.join(opts.nrfs)}")
+                global_noise = {}
+                for _i , nrf in zip("iqu", sorted(opts.nrfs)):
+                    global_noise[_i] = FitsManip.get_noise(noise_reg, nrf, data=None)
 
+            _noise_ref = global_noise["i"]
+            
             # generate region files only so end the loop. On to the next one
+            snitch.warning(f"Noise factor :   {opts.thresh:8.3f}")
+            for _k, _v in global_noise.items():
+                snitch.warning(f"Noise for {_k}-mfs :   {_v:8.8f}")
+                snitch.warning(f"Noise threshold {_k}-mfs :   {opts.thresh*_v:8.8f}")  
+            snitch.warning("...............................................")
+            
             IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, global_noise, opts.thresh)
+                    reg_file, opts.wcs_ref, _noise_ref, opts.thresh)
             if opts.r_only:
                 snitch.warning("Generated regions only as per request")
                 continue
             
-            snitch.warning(f"Noise is        : {global_noise}")
-            snitch.warning(f"Noise factor    : {opts.thresh}")
-            snitch.warning(f"Noise threshold : {opts.thresh * global_noise}")
+
             
             fpol_filter = FitsManip.get_image_stats2(
                 file_core, images, regs, global_noise, noise_reg,
@@ -1144,7 +1201,7 @@ if __name__ == "__main__":
                     # coz list indexing starts from 0
                     del edited[int(_.split("_")[-1]) + 2]
 
-                edited = list(edited.values)
+                edited = list(edited.values())
                 for _, _x in enumerate(edited[3:], 3):
                      edited[_] = edited[_].split("#")[0] + f"# {_-2},los\n"
 
@@ -1152,7 +1209,7 @@ if __name__ == "__main__":
                     fname.writelines(edited)
                 
                 IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, global_noise, opts.thresh)
+                    reg_file, opts.wcs_ref, _noise_ref, opts.thresh)
 
 
             if opts.auto_plot:

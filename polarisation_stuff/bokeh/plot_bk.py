@@ -40,7 +40,7 @@ class Pol():
     def polarisation_angle_error(p, q, u, q_err, u_err):
         "See A.11 Brentjens"
         err = (np.square(u*q_err) + np.square(q*u_err)) / (4 * p**4)
-        return np.rad2deg(np.sqrt(err))
+        return np.sqrt(err)
 
     @staticmethod
     def power_fn(q, u):
@@ -96,10 +96,6 @@ class Pol():
     def phase(inp):
         return np.angle(inp, deg=True)
 
-    @staticmethod
-    def angle(inp):
-        an = 0.5 * np.arctan2(inp.imag, inp.real)
-        return np.rad2deg(an)
 
 
     def generate_data(self):
@@ -107,7 +103,10 @@ class Pol():
         datas["power"] = Pol.power_fn(self.q, self.u)
         datas["fpol"] = Pol.fractional_pol(self.i, self.q, self.u)
         datas["lpol"] = self.lpol
-        datas["angle"] = Pol.polarisation_angle(self.q, self.u)
+        datas["angle"] = np.unwrap(Pol.polarisation_angle(self.q, self.u),
+                                    period=np.pi, discont=np.pi/2)
+        datas["angle"] = np.rad2deg(datas["angle"])
+
         datas["stokes"] = self.q + 1j*self.u
         datas["lambda_sq"] = Pol.lambda_squared(self.freqs)
         
@@ -121,7 +120,6 @@ class Pol():
 
         datas["q_err"] = self.q_err
         datas["u_err"] = self.u_err
-
         return datas
 
 
@@ -167,9 +165,10 @@ def make_plot(indata, meta_title, meta_data):
     glyphs = {"Circle": Circle, "Line": Line}
 
     #which data to get from the data products
-    mapping = {_: "lpol" for _ in ["lpol", "angle", "stokes"]}
-    mapping.update({_: _ for _ in ["fdirty", "fclean", "rmsf"]})
+    mapping = {_: "lpol" for _ in ["lpol", "stokes"]}
+    mapping.update({_: _ for _ in ["fdirty", "fclean", "rmtf"]})
     mapping["fpol"] = "fpol"
+    mapping["angle"] = "angle"
     
     fig = figure(
         plot_width=800, plot_height=500, sizing_mode="stretch_both",
@@ -193,6 +192,7 @@ def make_plot(indata, meta_title, meta_data):
             xdata = indata[params["xdata"]].copy()
         else:
             xdata = indata[meta_data["x"]]
+
 
         if "ydata" in params:
             ydata = indata[params["ydata"]].copy()
@@ -279,14 +279,18 @@ python plot_bk.py -id IQU-regions-mpc-20-circle-sel-0.05 IQU-regions-mpc-20-corr
 if __name__ == "__main__":
 
     opts = arg_parser().parse_args()
-
+    print("Starting bokeh plots")
 
     for y_file in opts.yamls:
         yaml_plots = read_yaml(y_file)
 
         for i_dir in opts.i_dirs:
+            files = glob(f"{i_dir}/*npz")
+            if len(files) == 0:
+                print("No LOS files found, skipping.")
             # for each LOS, read its data and plot it
-            for los in glob(f"{i_dir}/*npz"):
+            for los in files:
+                print(f"LOS: {los}")
                 reg = os.path.splitext(os.path.basename(los))[0]
                 depth_dir = glob(os.path.dirname(los) + "-depths*")[0]
 
@@ -295,8 +299,12 @@ if __name__ == "__main__":
 
                 gets ={g.lower(): los_data[g] for g in 
                     ['I', 'Q', 'U', 'I_err', 'Q_err', 'U_err', 'freqs', "lpol"]}
+                
+                for key, value in gets.items():
+                    gets[key] = np.ma.masked_array(data=value, mask=los_data["mask"]).compressed()
 
                 grps = {"grp1": [], "grp2": []}
+
                 pol_data = Pol(**gets).generate_data()
                 
                 # read los data for depths
@@ -307,7 +315,7 @@ if __name__ == "__main__":
                     continue
 
                 for plot, plot_params in yaml_plots.items():
-
+        
                     sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
                     if plot in ["fpol", "angle", "stokes", "lpol"]:
                         grps["grp1"].append(sub)

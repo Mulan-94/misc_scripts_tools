@@ -1,3 +1,7 @@
+"""
+Some references
+see https://stackoverflow.com/questions/61532337/python-modulenotfounderror-no-module-named
+"""
 import argparse
 import os
 import sys
@@ -9,20 +13,24 @@ sys.path.append(os.getcwd())
 import numpy as np
 import matplotlib 
 import matplotlib.pyplot as plt
-# matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
 from scipy import signal
+from astropy.constants import c as light_speed
 
-# setting this to qu_po because of its location in the misc_scripts_and_tools
-# see https://stackoverflow.com/questions/61532337/python-modulenotfounderror-no-module-named
 from scrap import IOUtils
 
 from ipdb import set_trace
 
-matplotlib.use('Agg') 
+
+# matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
+# matplotlib.use('Agg') 
 plt.style.use("seaborn")
 
 
-def lambda_to_faraday(lambda_sq, phi_range, pol_lam2):
+FIGSIZE = (16,9)
+wavelength = lambda x: 3e8/x
+lw = 1.2
+
+def lambda_to_faraday(lambda_sq, phi_range, lpol):
     """
     Computes Faraday Spectra using RM-Synthesis 
     as defined by Brentjens and de Bruyn (2005) eqn. 36
@@ -32,14 +40,13 @@ def lambda_to_faraday(lambda_sq, phi_range, pol_lam2):
         Lambda squared ranges
     phi_range
         Range of faraday depths to consider
-    pol_lam2
+    lpol
         Observed complex polarised surface brightness for each lambda squared
 
     Returns
     -------
     Polarised spectra per depth over a range of depths
     """
-
     N = len(lambda_sq)
 
     # get the initial lambda square value from the mean
@@ -51,8 +58,8 @@ def lambda_to_faraday(lambda_sq, phi_range, pol_lam2):
     # we're getting the rm spectrum per depth
     for k, phi in enumerate(phi_range):
         try:
-            fdata[k] = pow(N, -1) * np.sum(
-                pol_lam2 * np.exp(-2j * (lambda_sq-init_lambda_sq) * phi)
+            fdata[k] = pow(N, -1) * np.nansum(
+                lpol * np.exp(-2j * (lambda_sq-init_lambda_sq) * phi)
                 )
         except ZeroDivisionError:
             continue
@@ -95,15 +102,14 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
         dirac = np.zeros(len(phi_range))
         dirac[ind[0]] = 1
 
-        rmsf = signal.convolve(rmsf_fixed, dirac, mode='same')
-        rmsf = rmsf[dshift:-dshift+1]
+        rmtf = signal.convolve(rmsf_fixed, dirac, mode='same')
+        rmtf = rmtf[dshift:-dshift+1]
 
-        fspectrum -= f_comp * rmsf
+        fspectrum -= f_comp * rmtf
 
     Fres = fspectrum
     fclean = signal.convolve(components, Gauss, mode='same') + Fres
     return fclean, components, rmsf_orig
-
 
 
 def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gain=0.1, threshold=None):
@@ -138,45 +144,16 @@ def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gai
         delta[peak_loc] = 1
 
         ## shifting
-        rmsf = signal.convolve(padded_rmsf, delta, mode="same")[padding+1:-padding]
+        rmtf = signal.convolve(padded_rmsf, delta, mode="same")[padding+1:-padding]
 
         ## scaling
-        nrmsf = rmsf*fraction
-        
-        # if n%100 == 0:
-        #     fig, ax = plt.subplots(nrows=2,ncols=2, figsize=(16,9))
-        #     ax[0, 0].plot(phi_range, np.abs(dirty_spectrum), "b--", label="Dirty")
-        #     ax[0, 0].legend()
-            
-        #     ax[0, 1].plot(phi_range, np.abs(residuals), "y-", label="residuals")
-        #     ax[0, 1].axvline(phi_range[peak_loc], color="orangered", linestyle="--")
-        #     ax[0, 1].axhline(np.abs(residuals[peak_loc]), color="orangered", linestyle="--")
-        #     ax[0, 1].legend()
+        nrmsf = rmtf*fraction
 
-        #     ax[1, 0].plot(phi_range, np.abs(clean_components), "k-", label="cleans")
-        #     ax[1, 0].legend()
-            
-        #     ax[1, 1].plot(phi_range, np.abs(rmsf), label="RMSF")
-
-        #     az = ax[1, 1].twinx()
-        #     az.plot(phi_range, np.abs(nrmsf), "r:", label="Scaled rmsf")
-        #     az.set_ylabel("Scaled", color="red")
-        #     az.tick_params(axis="y", labelcolor="red")
-        #     ax[1, 1].legend()
-
-
-        #     # ax[2, 0].plot(phi_range, np.abs(restored), label="Restored + residuals")
-        #     # ax[2, 0].legend()
-
-        #     fig.suptitle(f"Iteration {n}")
-        #     fig.tight_layout()
-        #     plt.show()
-        
-        # subtract scaled and shifted RMSF from whatever is there
+        # subtract scaled and shifted rmtf from whatever is there
         residuals -= nrmsf
 
 
-    # should be a gaussian with FWHM same as the RMSF main lobe
+    # should be a gaussian with FWHM same as the rmtf main lobe
     fwhm = get_rmsf_fwhm(None, None, lambdas=minmax(lambdas))
     
     # FWHM of a gaussian is sigma * ((8ln2)^0.5)
@@ -187,7 +164,7 @@ def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gai
     restored += residuals
 
     # # if n%500 == 0:
-    fig, ax = plt.subplots(nrows=3,ncols=2, figsize=(16,9))
+    fig, ax = plt.subplots(nrows=3,ncols=2, figsize=FIGSIZE)
     ax[0, 0].plot(phi_range, np.abs(dirty_spectrum), "b--", label="Dirty")
     ax[0, 0].legend()
     
@@ -199,10 +176,10 @@ def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gai
     ax[1, 0].plot(phi_range, np.abs(clean_components), "k-", label="cleans")
     ax[1, 0].legend()
     
-    ax[1, 1].plot(phi_range, np.abs(rmsf), label="RMSF")
+    ax[1, 1].plot(phi_range, np.abs(rmtf), label="rmtf")
 
     az = ax[1, 1].twinx()
-    az.plot(phi_range, np.abs(nrmsf), "r:", label="Scaled rmsf")
+    az.plot(phi_range, np.abs(nrmsf), "r:", label="Scaled rmtf")
     az.set_ylabel("Scaled", color="red")
     az.tick_params(axis="y", labelcolor="red")
     ax[1, 1].legend()
@@ -219,7 +196,7 @@ def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gai
 
 
 def plot_data(lam, plam, phi, fphi):
-    fig, (ax, ay) = plt.subplots(1, 2, figsize=(12, 5))
+    fig, (ax, ay) = plt.subplots(1, 2, figsize=FIGSIZE)
     ax.plot(lam, abs(plam), 'b.')
     ax.set_xlabel('Wavelength [m$^2$]')
     ax.set_ylabel('Fractional Polarization')
@@ -251,20 +228,19 @@ def rm_synthesis(lambda_sq, lpol, phi_max=600, phi_step=10, niter=1000, gain=0.1
     1. Get the dirty faraday spectra
     2. Perform RM clean
     """
-
     phi_range =  np.arange(-phi_max, phi_max+phi_step, phi_step)
     # this ensures that the middle value is zero. 
-
+    
     fdirty = lambda_to_faraday(lambda_sq, phi_range, lpol)
 
     outs = { "depths": phi_range, "fdirty": fdirty.copy()}
     
     if clean:
         
-        fclean, fcomp, rmsf = rm_clean(lambda_sq, phi_range, fdirty.copy(), 
+        fclean, fcomp, rmtf = rm_clean(lambda_sq, phi_range, fdirty.copy(), 
                     niter=niter, gain=gain)
         # fclean = lexy_rm_clean(lambda_sq, phi_range, fdirty, n_iterations=500, loop_gain=0.1, threshold=None)
-        outs.update({"fclean": fclean, "fcomp": None, "rmsf": rmsf })
+        outs.update({"fclean": fclean, "fcomp": None, "rmtf": rmtf })
 
     return outs
 
@@ -274,8 +250,6 @@ def read_npz(fname):
         datas = {k: v for k, v in dat.items()}
     return datas
 
-
-wavelength = lambda x: 3e8/x
 
 def max_fdepth(central_freq, chanwidth):
     """
@@ -307,7 +281,7 @@ def max_visible_depth_scale(min_freq):
 def get_rmsf_fwhm(start_band, bandwidth, lambdas=None):
     """
     See Eqn 61 Brentjens
-    Approximate FWHM of the main peak of the RMSF
+    Approximate FWHM of the main peak of the rmtf
     start_band
         Initial frequency of the observation band
     bandwidth:
@@ -344,82 +318,118 @@ def arg_parser():
     return parse
 
 
+
+    
 if __name__ == "__main__":
     opts = arg_parser().parse_args()
 
     for _i, data_dir in enumerate(opts.data_dirs):
-        if not os.path.isdir(f"{opts.output_dir}-{_i}"):
-            os.makedirs(f"{opts.output_dir}-{_i}")
+        output_dir = f"{opts.output_dir}-dir{_i}"
+    
+        if not os.path.isdir(output_dir):
+            os.makedirs(output_dir)
 
-        output_dir = f"{opts.output_dir}-{_i}"
-
+    
         # get the various lines of sight
-        data_files =  sorted(glob(f"{data_dir}/*.npz"))
+        data_files =  sorted(glob(f"{data_dir}/*.npz"), key=os.path.getctime)
 
-        for data_file in data_files:
+        for _i, data_file in enumerate(data_files):
             reg_num = os.path.splitext(os.path.basename(data_file))[0].split("_")[-1]
-
+        
             print(f"File: {data_file}")
             datas = read_npz(data_file)
-            freq, stokes_q, stokes_u, stokes_i = (
-                datas["freqs"], datas["Q"], datas["U"], datas["I"])
 
-            linear_pol = stokes_q + 1j *stokes_u
+            mask = datas["mask"]
+            for key, value in datas.items():
+                if key not in ["mask", "freqs"]:
+                    datas[key] = np.ma.masked_array(data=value, mask=mask)
 
-            light_speed = 3e8
-            lam2 = (light_speed/freq)**2
 
-            # get the linear polzn values that are not nAN
-            ind_nan = ~np.isnan(np.absolute(linear_pol))
-            linear_pol = linear_pol[ind_nan]
-            lam2 = lam2[ind_nan]
+            freq, stokes_i, linear_pol ,fpol, fpol_err, pangle, pangle_err = (
+                datas["freqs"], datas["I"], datas["lpol"],
+                datas["fpol"], datas["fpol_err"], datas["pangle"],
+                datas["pangle_err"])
 
-            if linear_pol.size==0:
+            lam2 = (light_speed.value/freq)**2
+
+            if  len(linear_pol)==0:
                 print(f"Skipping region {reg_num}")
                 continue
-            
-            stokes_i = stokes_i[ind_nan]
-
-            rm_products = rm_synthesis(lam2, linear_pol, phi_max=opts.max_fdepth,
+                        
+            rm_products = rm_synthesis(
+                lam2, linear_pol.data, phi_max=opts.max_fdepth,
                 phi_step=opts.depth_step, niter=opts.niters, clean=True)
             
             del rm_products["fcomp"]
-            out_dir = IOUtils.make_out_dir(os.path.dirname(data_file) + f"-depths-{opts.max_fdepth}")
+            out_dir = IOUtils.make_out_dir(
+                os.path.dirname(data_file) + f"-depths-{opts.max_fdepth}")
             outfile = os.path.join(out_dir, f"reg_{reg_num}.npz")
             print(f"Saving data to:         {outfile}")
             np.savez(outfile, **rm_products)
 
-            #plotting everything
-            plt.close("all")
-            fig, ax = plt.subplots(figsize=(16, 9), ncols=2)
-
-            # ax[0].plot(lam2, np.absolute(linear_pol), 'o', label='| P |')
-            # ax[0].set_ylabel('Polarisation Intensity [Jy/bm]')
-            # ax[0].legend(loc='best')
             
-            ax[0].plot(lam2, np.absolute(linear_pol)/stokes_i, 'o')
+            #plotting everything
+            lam2 = np.ma.masked_array(data=lam2, mask=mask)
+
+            plt.close("all")
+            fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
+            ax[0].errorbar(lam2, fpol, yerr=fpol_err, 
+                            fmt='o', ecolor="red")
             ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
             ax[0].set_ylabel('Fractional Polarisation')
+
+            lam2 = lam2.compressed()
+            pangle = pangle.compressed()
             
+            u_pangle = np.unwrap(pangle, period=np.pi, discont=np.pi/2)
+            
+            # ax[1].plot(lam2, pangle, "r+", label="original")
+            ax[1].errorbar(lam2, u_pangle, yerr=pangle_err.compressed(),
+                            fmt='o', ecolor="red", label="unwrapped angle")
+            # linear fitting
+            res = np.ma.polyfit(lam2, u_pangle, deg=1)
+            reg_line = np.poly1d(res)(lam2)
+  
+            ax[1].plot(lam2, reg_line, "g--", label=f"linear fit, slope: {res[0]:.3f}", lw=lw)
+            ax[1].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+            ax[1].set_ylabel('Polarisation Angle')
+            ax[1].legend()
 
-            ax[1].plot(rm_products['depths'], np.absolute(rm_products['fdirty']), 'r--', label='Dirty Amp')
+            fd_peak = np.where(np.abs(rm_products["fclean"]) == np.abs(rm_products['fclean']).max())
+            rm_val = rm_products["depths"][fd_peak][0]
 
+            ax[2].plot(rm_products['depths'], np.abs(rm_products['fdirty']),
+                        'r--', label='Dirty Amp')
             if "fclean" in rm_products:
-                ax[1].plot(rm_products['depths'], np.absolute(rm_products['fclean']), 'k', label='Clean Amp')
-
-            # if "fcomp" in rm_products:
-            #     ax[1].plot(rm_products['depths'], np.absolute(rm_products['fcomp']), 'orangered', label='Clean Amp')
-
-            
-
-            ax[1].set_xlabel('Faraday depth [rad m$^{-2}$]')
-            ax[1].set_ylabel('Farady Spectrum')
-            ax[1].legend(loc='best')
+                ax[2].plot(rm_products['depths'], np.abs(rm_products['fclean']),
+                            'k', label=f'Clean Amp, RM {rm_val:.2f}')
+                # ax[2].axvline(rm_val, label=f"{rm_val:.3f}")
+            ax[2].set_xlabel('Faraday depth [rad m$^{-2}$]')
+            ax[2].set_ylabel('Farady Spectrum')
+            ax[2].legend(loc='best')
 
             fig.tight_layout()
             oname = os.path.join(output_dir, f"reg_{reg_num}.png")
             print(f"Saving Plot at:          {oname}")
             fig.savefig(oname)
+        
+
+        # RMTF
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, ncols=1, squeeze=True)
+        
+        ax.plot(rm_products["depths"], np.abs(rm_products["rmtf"]), "k-",
+            lw=lw, label="Amp")
+        ax.plot(rm_products["depths"], rm_products["rmtf"].real,
+            color="orangered", ls="--", lw=lw, label="Real")
+        ax.plot(rm_products["depths"], rm_products["rmtf"].imag, "g:",
+            lw=lw, label="Imag")
+        ax.set_xlabel(r"Faraday depth $\phi$")
+        ax.set_ylabel("RMTF")
+        ax.legend()
+        fig.tight_layout()
+        print(f"Saving RMTF to: " + os.path.join(output_dir, "rmtf.png"))
+        fig.savefig(os.path.join(output_dir, "rmtf.png"))
 
 
 
