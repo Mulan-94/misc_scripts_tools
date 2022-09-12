@@ -1,27 +1,69 @@
 #! /bin/python3
+import sys
 import argparse
 import os
 import re
+import time
 import logging
+import psutil
 import numpy as np
 
 from astropy.io import fits
-from glob import glob
 from casacore.tables import table
+from glob import glob
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 import dask.array as da
+from dask import compute
 
-from ipdb import set_trace
 
-logging.basicConfig()
-snitch = logging.getLogger("sade")
-snitch.setLevel(logging.INFO)
+GB = 2**30
+
+# I want the defautl max data in memory to be 6GB
+MAX_MEM = None
+
+def configure_logger(out_dir):
+    formatter = logging.Formatter(
+        datefmt='%H:%M:%S %d.%m.%Y',
+        fmt="%(asctime)s : %(levelname)s - %(message)s")
+    
+    if not os.path.isdir(out_dir):
+        os.makedirs(out_dir)
+
+    l_handler = logging.FileHandler(
+        os.path.join(out_dir, "smooth-operator.log"), mode="w")
+    l_handler.setLevel(logging.INFO)
+    l_handler.setFormatter(formatter)
+
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.INFO)
+    s_handler.setFormatter(formatter)
+
+    logger = logging.getLogger("sade")
+    logger.setLevel(logging.INFO)
+
+    logger.addHandler(l_handler)
+    logger.addHandler(s_handler)
+    return logger
 
 
 def get_arguments():
-    parser = argparse.ArgumentParser(description="Refine model images")
+    parser = argparse.ArgumentParser(description="Refine model images in frequency")
+    parser.add_argument("-od", "--output-dir", dest="output_dir",
+        default="smooth-ops", metavar="",
+        help="Where to put the output files.")
+    parser.add_argument("-nthreads", dest="nthreads", default=10, metavar="",
+        type=int, help="Number of threads to use in this")
+    parser.add_argument("-stokes", dest="stokes",
+        default="I", metavar="", type=str,
+        help="""Which stokes model to extrapolate. Write as single string e.g
+        IQUV. Required when there are multiple Stokes images in a directory.
+        Default 'I'.""")
+    parser.add_argument("-mem", "--max-mem", dest="max_mem", default=None,
+        type=int, metavar="",
+        help="Approximate memory cap in GB"
+        )
     reqs = parser.add_argument_group("Required arguments")
     reqs.add_argument("--ms", dest="ms_name", required=True, metavar="",
         help="Input MS. Used for getting reference frequency")
@@ -31,18 +73,10 @@ def get_arguments():
     reqs.add_argument("-co", "--channels-out", dest="channels_out", metavar="",
         required=True, type=int,
         help="Number of channels to generate out")
-    reqs.add_argument("-od", "--output-dir", dest="output_dir", default=None,
-        metavar="",
-        help="Where to put the output files.")
     reqs.add_argument("-order", "--polynomial-order", dest="poly_order",
-        default=None, metavar="", type=int,
+        default=4, metavar="", type=int,
         help="Order of the spectral polynomial")
-    reqs.add_argument("-nthreads", dest="nthreads", default=10, metavar="",
-        type=int, help="Number of threads to use in this")
-    reqs.add_argument("-stokes", dest="stokes",
-        default="I", metavar="", type=str,
-        help="""Which stokes model to extrapolate. Write as single streing e.g
-        IQUV. Default 'I'""")
+
     return parser
 
 
@@ -83,7 +117,6 @@ def read_input_image_header(im_name):
             #get the wsum
             info["wsum"] = hdu.header["WSCVWSUM"]
             info["data"] = hdu.data
-
     return info
 
 
@@ -178,18 +211,12 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
 
     nchan = outfreqs.size
     nband, nx, ny = model.shape
-    mask = np.any(model, axis=0)
+
+    result = {"xdims": nx, "ydims": ny}
 
     # components excluding zeros
-    beta = np.zeros_like(model)
-    beta[:, mask] = model[:, mask]
-    beta = beta.reshape(beta.shape[0], beta.size//beta.shape[0])
-
-    # convert this to a dask array
-    beta = da.from_array(beta, chunks=(beta.shape[0], 10_000_000//beta.shape[0]))
-    # beta = model[:, mask]
-
-    
+    beta = np.ma.masked_equal(model.reshape(nband,-1), 0)
+   
     if spectral_poly_order > infreqs.size:
         raise ValueError("spectral-poly-order can't be larger than nband")
 
@@ -203,37 +230,36 @@ def interp_cube(model, wsums, infreqs, outfreqs, ref_freq, spectral_poly_order):
 
     # set design matrix for each component
     # look at Offringa and Smirnov 1706.06786
-    Xfit = np.zeros([nband, spectral_poly_order])
+    xfit = np.zeros([nband, spectral_poly_order])
     for i in range(1, spectral_poly_order+1):
-        Xfit[:, i-1] = (whigh**i - wlow**i)/(i*wdiff)
+        xfit[:, i-1] = (whigh**i - wlow**i)/(i*wdiff)
 
-    # dirty_comps = Xfit.T.dot(wsums*beta)
-    dirty_comps = da.dot(Xfit.T, wsums*beta)
 
-    # hess_comps = Xfit.T.dot(wsums*Xfit)
-    hess_comps = da.dot(Xfit.T, wsums*Xfit)
 
-    # comps = np.linalg.solve(hess_comps, dirty_comps)
-    comps = da.linalg.solve(hess_comps, dirty_comps)
+    dirty_comps = np.dot(xfit.T, wsums*beta)
+    hess_comps = xfit.T.dot(wsums*xfit)
+
+    comps = da.from_array(
+        np.linalg.solve(hess_comps, dirty_comps),
+        chunks={0: 1, 1:"auto", 2:"auto"})
 
     w = outfreqs/ref_freq
-
-    # Xeval = np.zeros((nchan, spectral_poly_order))
-    # for c in range(spectral_poly_order):
-    #     Xeval[:, c] = w**c
     
-    Xeval = w[:, np.newaxis]**np.arange(spectral_poly_order)[np.newaxis, :]
+    xeval = w[:, np.newaxis]**np.arange(spectral_poly_order)[np.newaxis, :]
 
-    # betaout = Xeval.dot(comps)
-    betaout = da.dot(Xeval, comps)
-
-    betaout = betaout.reshape(betaout.shape[0], nx, ny)
+    # autogenerate step size. x by 3 coz betaout subarray grwos by 3
+    step = (MAX_MEM*GB)//(comps.nbytes*3)
+    betaout = dict()
+    for _i in range(0, nchan, step):
+        end = _i+step if _i+step < nchan else nchan
+        # betaout[_i, end] = da.dot(xeval[_i:end], comps).rechunk({0:1, 1:"auto"})
+        betaout[_i, end] = da.dot(xeval[_i:end], comps).rechunk("auto")
+        if "nbytes" not in result:
+            result["nbytes"] = betaout[_i, end].nbytes
+        snitch.info(f"Selecting channel {_i:4} >> {end:2}"); 
+    result["data"] = betaout
     
-    modelout = np.zeros((nchan, nx, ny))
-    # modelout = betaout[:, mask]
-    # modelout = modelout.reshape(nchan, nx, ny)
-    modelout = betaout
-    return modelout
+    return result
 
 
 def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out_fits):
@@ -258,21 +284,38 @@ def gen_fits_file_from_template(template_fits, center_freq, cdelt, new_data, out
     return
 
 
-def write_model_out(chan_num, temp_fname, output_dir, cdelt, models, freqs):
+def write_model_out(chan_num, chan_id, temp_fname, output_dir, cdelt, models, freqs):
+    """
+    chan_num:
+        Number of the channel in the current model sub-cube. Will usually
+        start from 0
+    chan_id:
+        Actual channel number in the 'grand scheme' of things. Mostly for 
+        naming purposes.
+    """
+    # snitch.info(f"Channel number: {chan_num}, id: {chan_id}")
     outname = os.path.basename(temp_fname)
-    outname = re.sub(r"-(\d){4}-", "-"+f"{chan_num}".zfill(4)+"-", outname)
+    outname = re.sub(r"-(\d){4}-", "-"+f"{chan_id}".zfill(4)+"-", outname)
     outname = os.path.join(output_dir, outname)
     gen_fits_file_from_template(
         temp_fname, freqs[chan_num], cdelt,
         models[chan_num], outname)
 
+
 def main():
     args = get_arguments().parse_args()
+    global snitch, MAX_MEM
 
-    if args.output_dir is None:
-        output_dir = os.path.join(os.path.dirname(args.input_prefix), "smooth_out") 
+    output_dir = args.output_dir
+
+    snitch = configure_logger(output_dir)
+    
+    if args.max_mem is not None:
+        MAX_MEM = args.max_mem
     else:
-        output_dir = args.output_dir
+        MAX_MEM = int(.2 *psutil.virtual_memory().total)//GB
+    snitch.info(f"Setting memory to: {MAX_MEM} GB")
+   
     
     if not os.path.isdir(output_dir):
         snitch.info(f"Creating output directory: {output_dir}")
@@ -281,18 +324,33 @@ def main():
     ref_freq = get_ms_ref_freq(args.ms_name)  
 
     snitch.info(f"Specified -stokes: {args.stokes.upper()}")
+
+    
     for stokes in args.stokes.upper():
+        START_TIME = time.perf_counter()
+
         snitch.info(f"Running Stoke's {stokes}")
         
         input_pref = os.path.abspath(args.input_prefix)
-        images_list = sorted(glob(
-                os.path.join(input_pref, f"*00*{stokes}-model*.fits")))
+
+        images_list = sorted(
+            glob(f"{input_pref}-[0-9][0-9][0-9][0-9]-{stokes}-model.fits"),
+            key=os.path.getctime)
+
         if len(images_list) == 0:
-            images_list = sorted(glob(
-                os.path.join(input_pref, f"*00*-model*.fits")))
+            images_list = sorted(
+                glob(f"{input_pref}-[0-9][0-9][0-9][0-9]-model.fits"),
+                key=os.path.getctime)
         
+    
         if len(images_list) == 0:
-            continue
+            snitch.warning("No image files were found")
+            sys.exit(-1)
+        else:
+            snitch.info(f"Found {len(images_list)} matching selections")
+            for _im in images_list:
+                snitch.info(os.path.basename(_im))
+            snitch.info("."*len(os.path.basename(_im)))
 
         im_heads = []
 
@@ -312,28 +370,34 @@ def main():
         w_sums = w_sums[:, np.newaxis]
         input_center_freqs = np.array([item["freq"] for item in im_heads])
 
-        out_model = interp_cube(model, w_sums, input_center_freqs, out_freqs,
-                                ref_freq, args.poly_order)
+        # out_model = interp_cube(model, w_sums, input_center_freqs, out_freqs,
+        #                         ref_freq, args.poly_order)
 
-        # for chan in range(args.channels_out):
-        #     outname = os.path.basename(images_list[0])
-        #     outname = re.sub(r"(\d){4}", f"{chan}".zfill(4), outname)
-        #     outname = os.path.join(output_dir, outname)
-        #     gen_fits_file_from_template(
-        #         images_list[0], out_freqs[chan], new_cdelt, out_model[chan],
-        #         outname)
+        mod_out = interp_cube(model, w_sums, input_center_freqs,
+                                    out_freqs, ref_freq, args.poly_order)
+        mod_data = mod_out["data"]
         
-        results = []
-        with ThreadPoolExecutor(args.nthreads) as executor:
-            results = executor.map(
-                partial(write_model_out, temp_fname=images_list[0],
-                        output_dir=output_dir, cdelt=new_cdelt,
-                        models=out_model, freqs=out_freqs), 
-                range(args.channels_out))
+        
+        for chan_range, data in mod_data.items():
+            data, = compute(data)
+            data = data.reshape(-1, mod_out["xdims"], mod_out["ydims"])
 
-        results = list(results)
-        
-        snitch.info("Done")
+            chan_ids = range(*chan_range)
+            chan_range = range(len(chan_ids))
+
+            results = []
+            
+            with ThreadPoolExecutor(args.nthreads) as executor:
+                results = executor.map(
+                    partial(write_model_out, temp_fname=images_list[0],
+                            output_dir=output_dir, cdelt=new_cdelt,
+                            models=data, freqs=out_freqs), 
+                    chan_range, chan_ids)
+
+            results = list(results)
+            snitch.info("Chunk change over") 
+            snitch.info("*"*50)
+        snitch.info(f"Stoke's {stokes} finished in {time.perf_counter() - START_TIME:.3f} secs")
 
 
 if __name__ == "__main__":
