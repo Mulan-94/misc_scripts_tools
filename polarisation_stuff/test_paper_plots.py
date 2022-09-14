@@ -25,8 +25,8 @@ from ipdb import set_trace
 warnings.filterwarnings("ignore", module="astropy")
 
 FIGSIZE = (16,9)
-EXT = ".svg"
-DPI = 600
+EXT = ".png"
+DPI = 100
 
 def set_image_projection(image_obj):
     """
@@ -43,6 +43,7 @@ def set_image_projection(image_obj):
     return image_obj
 
 
+'''
 ######################################################################################
 ## Plot polarised intensity for each channel
 
@@ -184,7 +185,7 @@ def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
 
     return
     
-
+'''
 
 ######################################################################################
 ## contours plotting and vectors
@@ -280,6 +281,98 @@ class PaperPlots:
         ax = set_image_projection(ax)
         cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
         ax.contour(pictor, colors="g", linewidths=1, origin="lower", levels=levels)
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
+            location="top", shrink=1, fraction=0.15)
+        ax.set_xlim(*jxr)
+        ax.set_ylim(*jyr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving jet image at:               "+ output)
+        fig.savefig(output+"-jet.png", dpi=DPI)
+        return
+
+
+
+    @staticmethod
+    def figure_3b_chandra(image, mask, jet_mask, chandra=None, chandra_jet=None, 
+        start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
+        output="chandra-3-total-intensity", kwargs={}):
+        """
+        image:
+            The data without masking. Will be zoomed in anyway
+        mask:
+            The masked used from cleaning
+        jet_mask:
+            Mask for this jet
+        
+        """
+
+        plt.close("all")
+        scaling = {
+            "linear": colors.Normalize,
+            "log": colors.LogNorm,
+            "symmetric": colors.SymLogNorm,
+            "centered": colors.CenteredNorm,
+            "power": colors.PowerNorm
+        }
+        wcs = rfu.read_image_cube(image)["wcs"]
+        pictor = rfu.get_masked_data(image, mask)
+        chandra = rfu.get_masked_data(chandra, mask)
+        mask = pictor.mask        
+
+        jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
+
+        levels = contour_levels(start, chandra)
+
+        wiggle = 20
+        y, x = np.where(mask == False)
+        jy, jx = np.where(jet_mask == False)
+        
+        
+        xr = np.min(x)-wiggle, np.max(x)+wiggle
+        yr = np.min(y)-wiggle, np.max(y)+wiggle
+
+        # jet limits
+        jxr = np.min(jx)-wiggle, np.max(jx)+wiggle
+        jyr = np.min(jy)-wiggle, np.max(jy)+wiggle
+
+        use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)       
+
+        ######################################################################
+        # Plotting the Total intesity with contours
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+
+    
+        # ax.contour(chandra, colors="g", linewidths=1, origin="lower", levels=levels)
+        ax.contour(snd.gaussian_filter(chandra, sigma=smooth_sigma), colors="g",
+            linewidths=1, origin="lower", levels=levels)
+
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
+        ax.set_xlim(*xr)
+        ax.set_ylim(*yr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving total intensity image at:   "+ output+"-cont")
+        fig.savefig(output+"-cont.png", dpi=DPI)
+
+
+        ######################################################################
+        # Plotting the jets now
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(pictor, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(snd.gaussian_filter(chandra, sigma=smooth_sigma), colors="g",
+            linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
             location="top", shrink=1, fraction=0.15)
         ax.set_xlim(*jxr)
@@ -462,8 +555,8 @@ class PaperPlots:
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
 
-
-        cs = ax.imshow(data, origin="lower", cmap="coolwarm_r", vmin=-1.7,
+        cs = ax.imshow(np.ma.masked_where(intensity<start, data.data),
+                    origin="lower", cmap="coolwarm_r", vmin=-1.7,
                     vmax=-0.5, aspect="equal")
         plt.colorbar(cs, label="Spectral Index", pad=0)
 
@@ -648,7 +741,12 @@ class PaperPlots:
         ax = set_image_projection(ax)
 
 
-        cs = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
+        # cs = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
+
+        # if I use the mask here, we get a problematic image, creating new mask
+        # where image is lower than `start` value
+        cs = ax.imshow(np.ma.masked_where(i_data<start, fpol.data),
+            origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
         plt.colorbar(cs, label="Degree of polarisation [Fractional Polarisation]",
             pad=0)
 
@@ -667,12 +765,18 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_10(q_image, u_image, mask, start=0.004, smooth_sigma=1,
+    def figure_10(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
         output="10-lpol-mfs.png"):
         """
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
         """
+
+        if isinstance(i_image, str):
+            i_data = rfu.get_masked_data(i_image, mask)
+        else:
+            i_data = i_image
+        
         
         if isinstance(q_image, str):
             q_data = rfu.get_masked_data(q_image, mask)
@@ -713,7 +817,8 @@ class PaperPlots:
         ax = set_image_projection(ax)
 
         
-        cs = ax.imshow(lpol, origin="lower", cmap="coolwarm", aspect="equal",
+        cs = ax.imshow(np.ma.masked_where(i_data<start, lpol.data),
+            origin="lower", cmap="coolwarm", aspect="equal",
                 # norm=colors.LogNorm(vmin=0.005, vmax=0.05)
                 vmin=0.005, vmax=0.05
                 )
@@ -792,7 +897,7 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_14(intensity, i_image, q_image, u_image, mask, start=0.004,
+    def figure_14(intensity, i_cube, q_cube, u_cube, mask, start=0.004,
         smooth_sigma=1, output="14-depolzn.png"):
         """
         # Degree of polzn lines without the contours
@@ -800,16 +905,16 @@ class PaperPlots:
         intesity: 
             Single image with for the intensity contours. Usually the MFS
         (i|q|u)-image
-            Cubes containing data for all the channels available. I will only use the
+            CUBES containing data for all the channels available. I will only use the
             first and last channels available int he cube
         """
         mask_data = fits.getdata(mask).squeeze()
         mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
 
         intensity = rfu.get_masked_data(intensity, mask)
-        i_data = fits.getdata(i_image).squeeze()
-        q_data = fits.getdata(q_image).squeeze()
-        u_data = fits.getdata(u_image).squeeze()
+        i_data = fits.getdata(i_cube).squeeze()
+        q_data = fits.getdata(q_cube).squeeze()
+        u_data = fits.getdata(u_cube).squeeze()
 
  
         lpol = np.abs(q_data + 1j*u_data)
@@ -839,7 +944,8 @@ class PaperPlots:
             snd.gaussian_filter(intensity, sigma=smooth_sigma),
             colors="k", linewidths=0.5, origin="lower", levels=levels)
 
-        cs = ax.imshow(depoln, origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
+        cs = ax.imshow(np.ma.masked_where(intensity<start, depoln.data),
+                origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
         plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]",
             pad=0)
 
@@ -942,10 +1048,60 @@ class PaperPlots:
         
         east_hist.set_xlim(-200, 200)
         west_hist.set_ylim(-200, 200)
-
-        # fig.tight_layout()
         fig.savefig(output)
         print(f"Output is at: {output}")
+
+
+
+def fixer():
+    """Text it fixit self contained testing thingy"""
+    cubes = sorted(glob(
+            os.path.join(".", os.environ["sel_cubes"], "*-image-cube.fits")
+            ))[:3]
+
+    imgs = sorted(glob("./*-mfs.fits"))
+    mask_dir = os.environ["mask_dir"]
+    products = os.environ["prods"]
+
+    mask = f"{mask_dir}/true_mask.fits"
+    jet_mask = f"{mask_dir}/jet.fits"
+
+    rm_map = os.path.join(products, "initial-RM-depth-at-peak-rm.fits")
+
+    idata = rfu.read_image_cube(cubes[0])["data"]
+    qdata = rfu.read_image_cube(cubes[1])["data"]
+    udata = rfu.read_image_cube(cubes[2])["data"]
+
+    chandra = [
+        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra.fits",
+        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
+        ]
+
+
+    for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
+        if not os.path.isdir(o_dir):
+            os.mkdir(o_dir)
+
+    # PaperPlots.figure_5b(
+    #     imgs[0],
+    #     f"{products}/spi-fitting/alpha-diff-reso.alpha.fits", mask, 
+    #     output="5b-spi-with-contours-mpl.png")
+
+    # PaperPlots.figure_9a(*imgs, mask)
+    # PaperPlots.figure_10(*imgs, mask)
+    # PaperPlots.figure_14(imgs[0], *cubes, mask)
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
+    #     vmin=0, vmax=2, scale="linear", cmap="magma")
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask,
+    #     output="fig3/chandra-total-intensity-max-1e-1", 
+    #     vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask,
+    #     output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+    #     scale="power", cmap="magma", kwargs={"gamma": 3.8})
+    
 
 
 def run_paper_mill():
@@ -996,6 +1152,11 @@ def run_paper_mill():
     qdata = rfu.read_image_cube(cubes[1])["data"]
     udata = rfu.read_image_cube(cubes[2])["data"]
 
+    chandra = [
+        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra.fits",
+        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
+        ]
+
     for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
         if not os.path.isdir(o_dir):
             os.mkdir(o_dir)
@@ -1006,7 +1167,7 @@ def run_paper_mill():
 
     PaperPlots.figure_8(*imgs, mask)
     PaperPlots.figure_9a(*imgs, mask)
-    PaperPlots.figure_10(*imgs[1:], mask)
+    PaperPlots.figure_10(*imgs, mask)
     PaperPlots.figure_14(imgs[0], *cubes, mask)
 
 
@@ -1022,6 +1183,19 @@ def run_paper_mill():
         output="fig3/total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
         scale="power", cmap="magma", kwargs={"gamma": 3.8})
 
+    # with chandra
+    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+        chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
+        vmin=0, vmax=2, scale="linear", cmap="magma")
+    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+        chandra_jet=chandra[1], jet_mask=jet_mask,
+        output="fig3/chandra-total-intensity-max-1e-1", 
+        vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
+    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+        chandra_jet=chandra[1], jet_mask=jet_mask,
+        output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+        scale="power", cmap="magma", kwargs={"gamma": 3.8})
+    
 
     images = {
         # "from_rick/pic-l-all-4k.fits": "fig4/4b-rick-intensity-contours-mpl.png", 
@@ -1054,7 +1228,7 @@ def run_paper_mill():
         PaperPlots.figure_9a(
             idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
         PaperPlots.figure_10(
-            qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
+            idata[_], qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
 
     print("----------------------------")
     print("Paper mill stopped")

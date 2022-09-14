@@ -19,8 +19,6 @@ from dask import compute
 
 
 GB = 2**30
-
-# I want the defautl max data in memory to be 6GB
 MAX_MEM = None
 
 def configure_logger(out_dir):
