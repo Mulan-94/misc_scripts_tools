@@ -307,8 +307,10 @@ echo "Normalize the wsums by the largest values";
 # # Doing this with a quick python script because, wll I can :) and store in this variable
 wsums=$(python -c "import numpy as np; wsums = np.loadtxt('wsums.txt'); wsums = np.round(wsums/wsums.max(), 4); print(*wsums)")
 
+freqs=$(cat frequencies.txt)
+
 # cw - channel weights, th-rms threshold factor, acr - add conv residuals, bm -  beam model
-spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/alpha-diff-reso -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l --products aeikb
+spimple-spifit -model $sel_cubes/i-models.fits -residual $sel_cubes/i-residuals.fits -o $spis/spi-map -th 10 -nthreads 32 -pb-min 0.15 -cw $wsums -acr -bm JimBeam -band l --products aeikb -cf $freqs
 
 
 echo -e "\n############################################################"
