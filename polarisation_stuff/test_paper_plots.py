@@ -1082,26 +1082,26 @@ def fixer():
         if not os.path.isdir(o_dir):
             os.mkdir(o_dir)
 
-    # PaperPlots.figure_5b(
-    #     imgs[0],
-    #     f"{products}/spi-fitting/spi-map.alpha.fits", mask, 
-    #     output="5b-spi-with-contours-mpl.png")
+    PaperPlots.figure_5b(
+        imgs[0],
+        f"{products}/spi-fitting/spi-map.alpha.fits", mask, 
+        output="5b-spi-with-contours-mpl.png")
 
     # PaperPlots.figure_9a(*imgs, mask)
     # PaperPlots.figure_10(*imgs, mask)
     # PaperPlots.figure_14(imgs[0], *cubes, mask)
     
-    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-        chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
-        vmin=0, vmax=2, scale="linear", cmap="magma")
-    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-        chandra_jet=chandra[1], jet_mask=jet_mask,
-        output="fig3/chandra-total-intensity-max-1e-1", 
-        vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
-    PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-        chandra_jet=chandra[1], jet_mask=jet_mask,
-        output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
-        scale="power", cmap="magma", kwargs={"gamma": 3.8})
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
+    #     vmin=0, vmax=2, scale="linear", cmap="magma")
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask,
+    #     output="fig3/chandra-total-intensity-max-1e-1", 
+    #     vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
+    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
+    #     chandra_jet=chandra[1], jet_mask=jet_mask,
+    #     output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+    #     scale="power", cmap="magma", kwargs={"gamma": 3.8})
     
 
 

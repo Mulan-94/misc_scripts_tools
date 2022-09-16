@@ -103,3 +103,23 @@ plot_spectra(file_core, f"QU-{file_core}")
 
 print(f"Finished in {perf_counter() - start} seconds")
 print("======================================")
+
+
+
+'''
+calculate the SPECtral index of some images CASA spi
+1. Select the highest and lowest frequency images
+2. Convolve them to the same resolution
+3. Multiply conv-image x mask (IN THAT ORDER) using fitstools
+4. Run the following funciton on those two images
+'''
+
+from casatasks import immath
+from casatasks import exportfits
+
+
+def casa_fit(im1, im2, output="casa-fit"):
+    immath(imagename=[im1, im2], mode='spix', outfile='casa-fit.im')
+    exportfits(imagename=f"{output}.im", fitsimage=f"{output}.fits")
+    return
+

@@ -268,8 +268,6 @@ echo "Get their wsums and store";
 echo -e "############################################################\n" 
 
 # Get wsums for the selected images with commas
-# echo $(fitsheader *-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g") | sed "s/ /,/g"
-
 fitsheader *I-model.fits | grep -i wsum | sed s"/WSCVWSUM=\s*//g" > wsums.txt
 
 
