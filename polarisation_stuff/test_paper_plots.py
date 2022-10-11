@@ -28,6 +28,11 @@ FIGSIZE = (16,9)
 EXT = ".png"
 DPI = 100
 
+# Where we are dumping the output
+PFIGS = "paper-figs"
+
+plt.style.use("seaborn")
+
 def set_image_projection(image_obj):
     """
     image_obj:
@@ -43,149 +48,6 @@ def set_image_projection(image_obj):
     return image_obj
 
 
-'''
-######################################################################################
-## Plot polarised intensity for each channel
-
-def plot_polarised_intensity(data=None, im_name=None, mask=None, oup=None, ref_image=None):
-    """
-    Input
-    -----
-    data:
-        Numpy array containing image data. If this is specified, the rest of 
-        the args are ignored.
-    im_name
-        Masked polarisation intensity im_name
-    mask_name
-        Name of mask to be applied
-    """
-
-    # if strings read the image, otherwise assume data is in numpy array
-    if isinstance(data, str):
-        data = rfu.read_image_cube(data, mask=False)["data"]
-    if mask is not None and isinstance(mask, str):
-        mask = rfu.read_image_cube(mask)["data"]
-    
-    chans = data.shape[0]
-    mid_chan = int(np.median(np.arange(chans)))
-    data = np.abs(data)
-
-    ydim, xdim = np.where(mask == False)
-    wiggle = 10
-    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
-    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
-
-    wcs = rfu.read_image_cube(ref_image)["wcs"]
-
-    """
-    fig, ax = plt.subplots(
-        figsize=FIGSIZE, ncols=6, nrows=int(np.ceil(chans/6)), sharex=True,
-        sharey=True, gridspec_kw={"wspace":0 , "hspace":0}, subplot_kw={'projection': wcs})
-    ax = ax.flatten()
-
-    for chan in range(chans):
-        lpol = np.ma.masked_array(data=data[chan], mask=mask)
-        image = ax[chan].imshow(lpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
-        plt.xlim(*xlims)
-        plt.ylim(*ylims)
-
-    fig.subplots_adjust(right=0.8)
-    # left, bottom, width, height
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.03, 0.7])
-    fig.colorbar(image, cax=cbar_ax)
-    fig.tight_layout()
-    """
-
-    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
-    lpol = np.ma.masked_array(data=data[mid_chan], mask=mask)
-    image = ax.imshow(lpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.1)
-    
-    ax = set_image_projection(ax)
-    ax.tick_params(axis="x", top=False)
-    ax.tick_params(axis="y", right=False)
-    
-    ax.set_title(f"Polarised Intensity of Middle Channel: "+f"{mid_chan}".zfill(4))
-    plt.xlim(*xlims)
-    plt.ylim(*ylims)
-    fig.colorbar(image, shrink=0.85)
-    fig.tight_layout()
-    oname = oup + f"-lin_pol{EXT}"
-    fig.savefig(oname)
-    print(f"Output is at: {oname}")
-
-
-######################################################################################
-## Plot fractional polzn for each channel
-
-def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
-    """
-    Input
-    -----
-    data:
-        Numpy array containing image data.  Otherwise, it is the name of
-        the iamge where the data will be gotten from 
-    mask_name  mask data
-        Name of mask to be applied. or amsk. This is amust fro mny own sake
-    """
-   
-    print("Starting frac pol plot")
-   
-    # if strings read the image, otherwise assume data is in numpy array
-    if isinstance(data, str):
-        data = rfu.read_image_cube(data, mask=False)["data"]
-    if mask is not None and isinstance(mask, str):
-        mask = rfu.read_image_cube(mask)["data"]
-    
-    chans = data.shape[0]
-    mid_chan = int(np.median(np.arange(chans)))
-    data = np.abs(data)
-
-    ydim, xdim = np.where(mask == False)
-    wiggle = 10
-    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
-    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
-
-    wcs = rfu.read_image_cube(ref_image)["wcs"]
-    
-    """
-    fig, ax = plt.subplots(
-        figsize=FIGSIZE, ncols=6, nrows=int(np.ceil(chans/6)), sharex=True,
-        sharey=True, gridspec_kw={"wspace":0 , "hspace":0})
-    ax = ax.flatten()
-
-    for chan in range(chans):
-        fpol = np.ma.masked_array(data=data[chan], mask=mask)
-        image = ax[chan].imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
-        plt.xlim(*xlims)
-        plt.ylim(*ylims)
-
-    fig.subplots_adjust(right=0.8)
-    # left, bottom, width, height
-    cbar_ax = fig.add_axes([0.85, 0.15, 0.03, 0.7])
-    fig.colorbar(image, cax=cbar_ax)
-    fig.tight_layout()
-    """
-
-    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
-    fpol = np.ma.masked_array(data=data[mid_chan], mask=mask)
-    image = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=0.3)
-    
-    ax = set_image_projection(ax)
-    ax.tick_params(axis="x", top=False)
-    ax.tick_params(axis="y", right=False)
-    
-    ax.set_title(f"Fractional polarisation of Middle Channel: "+f"{mid_chan}".zfill(4))
-    plt.xlim(*xlims)
-    plt.ylim(*ylims)
-    fig.colorbar(image, shrink=0.85)
-    fig.tight_layout()
-    oname = oup + f"-fpol{EXT}"
-    fig.savefig(oname)
-    print(f"Output is at: {oname}")
-
-    return
-    
-'''
 
 ######################################################################################
 ## contours plotting and vectors
@@ -197,13 +59,13 @@ def plot_fractional_polzn(data, mask, oup=None, ref_image=None):
 class PaperPlots:
 
     @staticmethod
-    def figure_3_total_and_jets(image, mask, jet_mask, start=0.004, vmin=0,
+    def figure_3_total_and_jets(i_image, mask, jet_mask, start=0.004, vmin=0,
             vmax=2, scale="linear", cmap="magma",
-            output="3-total-intensity", kwargs={}):
+            output=f"{PFIGS}/3-total-intensity", kwargs={}):
         
         plt.close("all")
         """
-        image:
+        i_image:
             The data without masking. Will be zoomed in anyway]
         """
         scaling = {
@@ -213,13 +75,15 @@ class PaperPlots:
             "centered": colors.CenteredNorm,
             "power": colors.PowerNorm
         }
-        wcs = rfu.read_image_cube(image)["wcs"]
-        pictor = rfu.get_masked_data(image, mask)
-        mask = pictor.mask
+        wcs = rfu.read_image_cube(i_image)["wcs"]
+        i_data = rfu.get_masked_data(i_image, mask)
+        mask = i_data.mask
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
 
         jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
 
-        levels = contour_levels(start, pictor)
+        levels = contour_levels(start, i_data)
 
         wiggle = 20
         y, x = np.where(mask == False)
@@ -242,7 +106,7 @@ class PaperPlots:
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
-        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
         ax.set_xlim(*xr)
         ax.set_ylim(*yr)
@@ -260,8 +124,8 @@ class PaperPlots:
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
-        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
-        ax.contour(pictor, colors="g", linewidths=1, origin="lower", levels=levels)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(i_data, colors="g", linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
         ax.set_xlim(*xr)
         ax.set_ylim(*yr)
@@ -279,8 +143,8 @@ class PaperPlots:
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
-        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
-        ax.contour(pictor, colors="g", linewidths=1, origin="lower", levels=levels)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(i_data, colors="g", linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
             location="top", shrink=1, fraction=0.15)
         ax.set_xlim(*jxr)
@@ -294,13 +158,12 @@ class PaperPlots:
         return
 
 
-
     @staticmethod
-    def figure_3b_chandra(image, mask, jet_mask, chandra=None, chandra_jet=None, 
+    def figure_3b_chandra(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
         start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
-        output="chandra-3-total-intensity", kwargs={}):
+        output=f"{PFIGS}/chandra-3-total-intensity", kwargs={}):
         """
-        image:
+        i_image:
             The data without masking. Will be zoomed in anyway
         mask:
             The masked used from cleaning
@@ -317,14 +180,16 @@ class PaperPlots:
             "centered": colors.CenteredNorm,
             "power": colors.PowerNorm
         }
-        wcs = rfu.read_image_cube(image)["wcs"]
-        pictor = rfu.get_masked_data(image, mask)
-        chandra = rfu.get_masked_data(chandra, mask)
-        mask = pictor.mask        
+        wcs = rfu.read_image_cube(i_image)["wcs"]
+        i_data = rfu.get_masked_data(i_image, mask)
+        chandra_data = rfu.get_masked_data(chandra, mask)
+        mask = i_data.mask
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
 
         jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
 
-        levels = contour_levels(start, chandra)
+        levels = contour_levels(start, chandra_data)
 
         wiggle = 20
         y, x = np.where(mask == False)
@@ -346,11 +211,11 @@ class PaperPlots:
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
-        cs = ax.imshow(pictor.data, origin="lower", norm=use_scale, cmap=cmap)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
 
     
-        # ax.contour(chandra, colors="g", linewidths=1, origin="lower", levels=levels)
-        ax.contour(snd.gaussian_filter(chandra, sigma=smooth_sigma), colors="g",
+        # ax.contour(chandra_data, colors="g", linewidths=1, origin="lower", levels=levels)
+        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
             linewidths=1, origin="lower", levels=levels)
 
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
@@ -370,8 +235,8 @@ class PaperPlots:
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
-        cs = ax.imshow(pictor, origin="lower", norm=use_scale, cmap=cmap)
-        ax.contour(snd.gaussian_filter(chandra, sigma=smooth_sigma), colors="g",
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
             linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
             location="top", shrink=1, fraction=0.15)
@@ -387,31 +252,33 @@ class PaperPlots:
 
     
     @staticmethod
-    def figure_4b(image, mask, start=0.004, smooth_sigma=13,
-        output="4b-intensity-contours.png"):
+    def figure_4b_intensity_contours(i_image, mask, start=0.004, smooth_sigma=13,
+        output="{PFIGS}/4b-intensity-contours.png"):
 
-        data = rfu.get_masked_data(image, mask)
+        i_data = rfu.get_masked_data(i_image, mask)
         # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
-        data[np.where(np.isnan(data))] = 0
-        mask = data.mask
+        i_data[np.where(np.isnan(i_data))] = 0
+        mask = i_data.mask
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
 
         ydim, xdim = np.where(mask == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
-        wcs = rfu.read_image_cube(image)["wcs"]
+        wcs = rfu.read_image_cube(i_image)["wcs"]
 
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
 
         # the image data
-        levels = contour_levels(start, data)
+        levels = contour_levels(start, i_data)
         ax.contour(
-            snd.gaussian_filter(data, sigma=smooth_sigma),
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
             colors="g", linewidths=0.5, origin="lower", levels=levels)
 
-        cs = ax.imshow(data, origin="lower", cmap="coolwarm", vmin=0, vmax=.127,
+        cs = ax.imshow(i_data, origin="lower", cmap="coolwarm", vmin=0, vmax=.127,
                         aspect="equal")
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0)
     
@@ -430,7 +297,7 @@ class PaperPlots:
 
     
     @staticmethod
-    def table2(cube, region, output="2-table.png"):
+    def table2_core_flux_wfreq(cube, region, output=f"{PFIGS}/2-table.png"):
         """
         Monitor Change in the flux of the core with frequency
 
@@ -473,8 +340,7 @@ class PaperPlots:
 
     
     @staticmethod
-    def table3(elobe, wlobe, output="3-table-lobe-fluxes.png", smooth_sigma=10):
-        plt.style.use("seaborn")
+    def table3_lobe_flux_wfreq(elobe, wlobe, output=f"{PFIGS}/3-table-lobe-fluxes.png", smooth_sigma=10):
         """
         Monitor change of lobes' flux with frequncy
         (e|w)lobe:
@@ -530,10 +396,12 @@ class PaperPlots:
 
     
     @staticmethod
-    def figure_5b(intensity, image, mask, start=0.004, smooth_sigma=13,
-        output="5b-spi-intensity-contours.png"):
+    def figure_5b_spi_wintensity_contours(i_image, spi_image, mask, start=0.004, smooth_sigma=13,
+        output=f"{PFIGS}/5b-spi-intensity-contours.png"):
         """
-        image:
+        i_image:
+            The total intensity image
+        spi_image:
             The SPI image
         mask:
             The image mask
@@ -541,29 +409,32 @@ class PaperPlots:
             Where the contour levels should start
         """
         
-        intensity = rfu.get_masked_data(intensity, mask)
-        data = rfu.get_masked_data(image, mask)
-        mask = data.mask
+        i_data = rfu.get_masked_data(i_image, mask)
+        spi_data = rfu.get_masked_data(spi_image, mask)
+        mask = i_data.mask
+
+        # only show where i is greater than start
+        spi_data = np.ma.masked_where(i_data<start, spi_data)
 
         ydim, xdim = np.where(mask == False)
         wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
-        wcs = rfu.read_image_cube(image)["wcs"]
+        wcs = rfu.read_image_cube(spi_image)["wcs"]
 
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
 
-        cs = ax.imshow(np.ma.masked_where(intensity<start, data.data),
+        cs = ax.imshow(spi_data,
                     origin="lower", cmap="coolwarm_r", vmin=-1.7,
                     vmax=-0.5, aspect="equal")
         plt.colorbar(cs, label="Spectral Index", pad=0)
 
         # the image data
-        levels = contour_levels(start, intensity)
+        levels = contour_levels(start, i_data)
         ax.contour(
-            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
             colors="k", linewidths=0.5, origin="lower", levels=levels)
     
         ax.tick_params(axis="x", top=False)
@@ -581,8 +452,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_8(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
-        output="8-dop-contours-mfs.png"):
+    def figure_8_dop_magnetic_fields_contours(i_image, fp_image, angle_image, mask,
+        start=0.004, smooth_sigma=1, output=f"{PFIGS}/8-dop-contours-mfs.png"):
         """
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
@@ -592,15 +463,15 @@ class PaperPlots:
         else:
             i_data = i_image
         
-        if isinstance(q_image, str):
-            q_data = rfu.get_masked_data(q_image, mask)
+        if isinstance(fp_image, str):
+            fp_data = rfu.get_masked_data(fp_image, mask)
         else:
-            q_data = q_image
+            fp_data = fp_image
         
-        if isinstance(u_image, str):
-            u_data = rfu.get_masked_data(u_image, mask)
+        if isinstance(angle_image, str):
+            angle_data = rfu.get_masked_data(angle_image, mask)
         else:
-            u_data = u_image
+            angle_data = angle_image
 
         if isinstance(mask, str):
             mask_data = fits.getdata(mask).squeeze()
@@ -608,25 +479,18 @@ class PaperPlots:
         else:
             mask_data = i_data.mask
 
-        if  not np.ma.is_masked(i_data):
-            i_data = np.ma.masked_array(i_data, mask=mask_data)
-        if  not np.ma.is_masked(q_data):
-            q_data = np.ma.masked_array(q_data, mask=mask_data)
-        if  not np.ma.is_masked(u_data):
-            u_data = np.ma.masked_array(u_data, mask=mask_data)
-            
-
-        lpol = np.ma.abs(q_data + 1j*u_data)
-        fpol = np.ma.divide(lpol, i_data)
-        p_angle = 0.5 * np.ma.arctan2(u_data, q_data)
-
-        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
-        # data[np.where(np.isnan(data))] = 0
+    
+        
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        
+        # base the masks for the rest on I
+        fp_data = np.ma.masked_where(i_data<start, fp_data)
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
 
         wcs = rfu.read_image_cube(mask)["wcs"]
         
         ydim, xdim = np.where(mask_data == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
@@ -648,28 +512,26 @@ class PaperPlots:
         plt.colorbar(cs, label="Total Intensity", pad=0)
 
         #################################
-        skip = 5
-        slicex = slice(None, fpol.shape[0], skip)
-        slicey = slice(None, fpol.shape[-1], skip)
+        skip = 7
+        slicex = slice(None, fp_data.shape[0], skip)
+        slicey = slice(None, fp_data.shape[-1], skip)
         col, row = np.mgrid[slicex, slicey]
 
         # get M vector by rotating E vector by 90
-        p_angle = p_angle[slicex, slicey] #+ (np.pi/2)
-        fpol = fpol[slicex, slicey]
+        angle_data = angle_data[slicex, slicey]
+        fp_data = fp_data[slicex, slicey]
 
         # nornalize this
         
-        fpol = np.ma.masked_greater(fpol, 1)
-        fpol = np.ma.masked_less(fpol, 0)
-        scales = fpol / np.ma.max(fpol)
+        scales = fp_data / np.ma.max(fp_data)
     
         # scale as amplitude
-        u = scales * np.cos(p_angle)
-        v = scales * np.sin(p_angle)
+        u = scales * np.cos(angle_data)
+        v = scales * np.sin(angle_data)
 
         qv = ax.quiver(
             row, col, u, v, angles="xy", pivot='tail', headlength=4,
-            width=0.0008, scale=5, headwidth=0)
+            width=0.0012, scale=20, headwidth=2, color="black")
         
         #################################
 
@@ -689,26 +551,28 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_9a(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
-        output="9a-dop-mfs.png"):
+    def figure_8b_dop_magnetic_fields_contours(i_image, fpol_image, angle_image, mask,
+        start=0.004, smooth_sigma=1, output=f"{PFIGS}/8b-dop-contours-mfs.png"):
         """
-        # Degree of polzn lines without the contours
-    
+        linear poln, intensity contours, rm values vectors
+        # Degree of polzn lines vs contours
+        # we're not using cubes, we use the MFS images
         """
+
         if isinstance(i_image, str):
             i_data = rfu.get_masked_data(i_image, mask)
         else:
             i_data = i_image
         
-        if isinstance(q_image, str):
-            q_data = rfu.get_masked_data(q_image, mask)
+        if isinstance(fpol_image, str):
+            fpol_data = rfu.get_masked_data(fpol_image, mask)
         else:
-            q_data = q_image
+            fpol_data = fpol_image
         
-        if isinstance(u_image, str):
-            u_data = rfu.get_masked_data(u_image, mask)
+        if isinstance(angle_image, str):
+            angle_data = rfu.get_masked_data(angle_image, mask)
         else:
-            u_data = u_image
+            angle_data = angle_image
 
         if isinstance(mask, str):
             mask_data = fits.getdata(mask).squeeze()
@@ -718,20 +582,114 @@ class PaperPlots:
 
         if  not np.ma.is_masked(i_data):
             i_data = np.ma.masked_array(i_data, mask=mask_data)
-        if  not np.ma.is_masked(q_data):
-            q_data = np.ma.masked_array(q_data, mask=mask_data)
-        if  not np.ma.is_masked(u_data):
-            u_data = np.ma.masked_array(u_data, mask=mask_data)
-            
- 
-        lpol = np.abs(q_data + 1j*u_data)
-        fpol = np.divide(lpol, i_data)
-        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
-        # data[np.where(np.isnan(data))] = 0
+        
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        
+        # base the masks for the rest on I
+        fpol_data = np.ma.masked_where(i_data<start, fpol_data)
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+        
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 20
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        # the image data
+        levels = contour_levels(start, i_data)
+
+        # total intensity contours
+        ax.contour(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+       
+        # linear polarisation image
+        cs = ax.imshow(fpol_data,
+            cmap="coolwarm", origin="lower", vmin=0.1, vmax=0.7
+            # norm=colors.LogNorm(vmin=fpol_data.min(), vmax=fpol_data.max())
+            )
+
+        plt.colorbar(cs, label="Fractional polarisation", pad=0)
+
+        #################################
+        skip = 7
+        slicex = slice(None, fpol_data.shape[0], skip)
+        slicey = slice(None, fpol_data.shape[-1], skip)
+        col, row = np.mgrid[slicex, slicey]
+
+        # get M vector by rotating E vector by 90
+        angle_data = angle_data[slicex, slicey]
+
+        # nornalize this, lenght of the vector
+        scales = 0.05
+    
+        # scale as amplitude
+        u = scales * np.cos(angle_data)
+        v = scales * np.sin(angle_data)
+
+        qv = ax.quiver(
+            row, col, u, v, angles="xy", pivot='tail', headlength=4,
+            width=0.0012, scale=5, headwidth=2, color="black")
+        
+        #################################
+
+    
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print(f"Saving plot: {output}")
+        plt.savefig(output, dpi=DPI)
+        plt.close("all")
+
+
+    @staticmethod
+    def figure_9a_fractional_poln(i_image, fp_image, mask, start=0.004,
+        smooth_sigma=1, output=f"{PFIGS}/9a-dop-mfs.png"):
+        """
+        # Degree of polzn lines without the contours
+        This is determined from the FPOL map. 
+        
+        NOTE THAT: The FPOL map was generated
+        by using the channel which had the maximum polarised intensity
+        and dividing that with the corresponding I image.
+    
+        """
+        plt.close("all")
+        if isinstance(i_image, str):
+            i_data = rfu.get_masked_data(i_image, mask)
+        else:
+            i_data = i_image
+        
+        if isinstance(fp_image, str):
+            fp_data = rfu.get_masked_data(fp_image, mask)
+        else:
+            fp_data = fp_image
+        
+     
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = i_data.mask
+
+        
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        # base the masks for the rest on I
+        fp_data = np.ma.masked_where(i_data<start, fp_data)
+
         mask_data = i_data.mask
 
         ydim, xdim = np.where(mask_data == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
@@ -740,20 +698,31 @@ class PaperPlots:
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
 
+        # the image data
+        i_levels = contour_levels(start, i_data)
+        # total intensity contours
+        ax.contour(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=i_levels)
 
-        # cs = ax.imshow(fpol, origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
 
         # if I use the mask here, we get a problematic image, creating new mask
         # where image is lower than `start` value
-        cs = ax.imshow(np.ma.masked_where(i_data<start, fpol.data),
-            origin="lower", cmap="coolwarm", vmin=0, vmax=.7, aspect="equal")
-        plt.colorbar(cs, label="Degree of polarisation [Fractional Polarisation]",
+        levels = contour_levels(0.01, fp_data)
+        cs = ax.contourf(
+            fp_data,
+            cmap="coolwarm", origin="lower", levels=levels,#vmin=0, vmax=1
+            )
+        # cs = ax.imshow(fp_data,
+        #     origin="lower", cmap="coolwarm", aspect="equal", vmin=0, vmax=1,
+        #     # norm=colors.LogNorm(vmin=fp_data.min(), vmax=1)
+        #     )
+        plt.colorbar(cs, label="Fractional Polarisation",
             pad=0)
 
-        
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
-
+        
         plt.xlim(*xlims)
         plt.ylim(*ylims)
         fig.canvas.draw()
@@ -765,11 +734,11 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_10(i_image, q_image, u_image, mask, start=0.004, smooth_sigma=1,
-        output="10-lpol-mfs.png"):
+    def figure_10_linear_poln(i_image, lp_image, mask, start=0.004, smooth_sigma=1,
+        output=f"{PFIGS}/10-lpol-mfs.png"):
         """
-        # Degree of polzn lines vs contours
-        # we're not using cubes, we use the MFS images
+        NOTE THAT: The LPOL map was generated
+        by using the channel which had the maximum polarised intensity per pixel.
         """
 
         if isinstance(i_image, str):
@@ -778,35 +747,23 @@ class PaperPlots:
             i_data = i_image
         
         
-        if isinstance(q_image, str):
-            q_data = rfu.get_masked_data(q_image, mask)
+        if isinstance(lp_image, str):
+            lp_data = rfu.get_masked_data(lp_image, mask)
         else:
-            q_data = q_image
+            lp_data = lp_image
         
-        if isinstance(u_image, str):
-            u_data = rfu.get_masked_data(u_image, mask)
-        else:
-            u_data = u_image
-
         if isinstance(mask, str):
             mask_data = fits.getdata(mask).squeeze()
             mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
         else:
-            mask_data = q_data.mask
+            mask_data = i_data.mask
 
-        if  not np.ma.is_masked(q_data):
-            q_data = np.ma.masked_array(q_data, mask=mask_data)
-        if  not np.ma.is_masked(u_data):
-            u_data = np.ma.masked_array(u_data, mask=mask_data)
-
-        lpol = np.abs(q_data + 1j*u_data)
-        
-        # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
-        # data[np.where(np.isnan(data))] = 0
-        mask_data = q_data.mask
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        # base the masks for the rest on I
+        lp_data = np.ma.masked_where(i_data<start, lp_data)
 
         ydim, xdim = np.where(mask_data == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
@@ -815,14 +772,22 @@ class PaperPlots:
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs},
                     )
         ax = set_image_projection(ax)
-
         
-        cs = ax.imshow(np.ma.masked_where(i_data<start, lpol.data),
+        cs = ax.imshow(lp_data,
             origin="lower", cmap="coolwarm", aspect="equal",
                 # norm=colors.LogNorm(vmin=0.005, vmax=0.05)
                 vmin=0.005, vmax=0.05
                 )
-        plt.colorbar(cs, label="| P |", pad=0)
+
+         # the image data
+        levels = contour_levels(start, i_data)
+        # total intensity contours
+        ax.contour(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+
+
+        plt.colorbar(cs, label="Polarised Intensity | P |", pad=0)
         
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
@@ -838,13 +803,13 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_rm_map(intensity, rm_map, mask, start=0.004, smooth_sigma=1,
-        output="rm-map.png"):
+    def figure_rm_map(i_image, rm_map, mask, start=0.004, smooth_sigma=1,
+        output=f"{PFIGS}/rm-map.png"):
         """
-        # Degree of polzn lines vs contours
-        # we're not using cubes, we use the MFS images
+        Plot the RM-MAP
+        Only where the total intensity is greater thab start
         """
-        intensity = rfu.get_masked_data(intensity, mask)
+        i_data = rfu.get_masked_data(i_image, mask)
 
         if isinstance(rm_map, str):
             rm_data = rfu.get_masked_data(rm_map, mask)
@@ -857,13 +822,12 @@ class PaperPlots:
         else:
             mask_data = rm_data.mask
 
-        if  not np.ma.is_masked(rm_data):
-            rm_data = np.ma.masked_array(rm_data, mask=mask_data)
- 
-        mask_data = rm_data.mask
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        # base the masks for the rest on I
+        rm_data = np.ma.masked_where(i_data<start, rm_data)
 
         ydim, xdim = np.where(mask_data == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
@@ -874,11 +838,11 @@ class PaperPlots:
 
         
         cs = ax.imshow(rm_data, origin="lower", cmap="coolwarm", 
-            aspect="equal", vmin=30, vmax=80)
+            aspect="equal", vmin=-45, vmax=85)
 
         # the image data
-        levels = contour_levels(start, intensity)
-        ax.contour(intensity,
+        levels = contour_levels(start, i_data)
+        ax.contour(i_data,
             colors="k", linewidths=0.5, origin="lower", levels=levels)
 
         plt.colorbar(cs, label="Rotation Measure", pad=0)
@@ -897,12 +861,13 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_14(intensity, i_cube, q_cube, u_cube, mask, start=0.004,
-        smooth_sigma=1, output="14-depolzn.png"):
+    def figure_14_depolarisation(intensity, i_cube, q_cube, u_cube, mask, start=0.004,
+        smooth_sigma=1, output=f"{PFIGS}/14-depolzn.png"):
         """
-        # Degree of polzn lines without the contours
-        # here we shall get the cube and use the first and last channels
-        intesity: 
+        Here we shall get the cube and use the first and last channels. We 
+        therefore do not use the single generated FPOL map.
+
+        intensity: 
             Single image with for the intensity contours. Usually the MFS
         (i|q|u)-image
             CUBES containing data for all the channels available. I will only use the
@@ -912,30 +877,26 @@ class PaperPlots:
         mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
 
         intensity = rfu.get_masked_data(intensity, mask)
-        i_data = fits.getdata(i_cube).squeeze()
-        q_data = fits.getdata(q_cube).squeeze()
-        u_data = fits.getdata(u_cube).squeeze()
+        intensity = np.ma.masked_where(intensity<start, intensity)
 
- 
-        lpol = np.abs(q_data + 1j*u_data)
-        fpol = np.divide(lpol, i_data)[[0,-1]]
+        # select the first and last channels only
+        i_data = fits.getdata(i_cube).squeeze()[[0,-1]]
+        q_data = fits.getdata(q_cube).squeeze()[[0,-1]]
+        u_data = fits.getdata(u_cube).squeeze()[[0,-1]]
 
-        fpol = np.ma.masked_greater(fpol, 1)
-        fpol = np.ma.masked_less(fpol, 0)
-
-
-        fpol = np.ma.masked_array(fpol, mask=np.logical_or(fpol.mask, mask_data))
+        fpol = np.divide(np.abs(q_data + 1j*u_data), i_data)
 
         depoln = fpol[0]/fpol[-1]
+        depoln = np.ma.masked_array(data=depoln, mask=intensity.mask)
 
         ydim, xdim = np.where(mask_data == False)
-        wiggle = 70
+        wiggle = 20
         xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
         ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
 
         wcs = rfu.read_image_cube(mask)["wcs"]
 
-        levels = contour_levels(start, i_data)
+        levels = contour_levels(start, intensity)
 
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -944,7 +905,7 @@ class PaperPlots:
             snd.gaussian_filter(intensity, sigma=smooth_sigma),
             colors="k", linewidths=0.5, origin="lower", levels=levels)
 
-        cs = ax.imshow(np.ma.masked_where(intensity<start, depoln.data),
+        cs = ax.imshow(depoln,
                 origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
         plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]",
             pad=0)
@@ -965,12 +926,12 @@ class PaperPlots:
 
     
     @staticmethod
-    def figure_12_13(intensity, rm_image, emask, wmask, lmask, all_mask,
-        start=0.0552, smooth_sigma=0, output="12-rm-lobes.png"):
+    def figure_12_13_rm_lobes_histogram(i_image, rm_image, emask, wmask, lmask, all_mask,
+        start=0.004, smooth_sigma=0, output=f"{PFIGS}/12-rm-lobes.png"):
         """
         RM and histogram for lobes 
 
-        intensity:
+        i_image:
             Image to be used for the intensity contours. Usually MFS
         rm_image
             Image containing the required RMs
@@ -981,17 +942,23 @@ class PaperPlots:
         all_mask
             Pictor A mask
         start
-            Where the contours should start
+            Where the contours should start 0.0552
         smooth_sigma
             Factor to smooth the contours
         """
         plt.close("all")
+        i_data = rfu.get_masked_data(i_image, all_mask)
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
+
         rm_lobes = rfu.get_masked_data(rm_image, lmask)
-        intensity = rfu.get_masked_data(intensity, all_mask)
+        rm_lobes = np.ma.masked_where(i_data<start, rm_lobes)
 
         w_lobe = rfu.get_masked_data(rm_image, wmask)
         e_lobe = rfu.get_masked_data(rm_image, emask)
-
+        # w_lobe = np.ma.masked_array(data=rm_lobes, mask=wmask)
+        # e_lobe = np.ma.masked_array(data=rm_lobes, mask=emask)
+        
         wcs = rfu.read_image_cube(lmask)["wcs"]
 
         fig = plt.figure(figsize=FIGSIZE)
@@ -1005,15 +972,15 @@ class PaperPlots:
         # #image.axis("off")
 
         ca = image.imshow(
-            rm_lobes, origin="lower", cmap="coolwarm", vmin=30,
-            vmax=80, aspect="equal")
+            rm_lobes, origin="lower", cmap="coolwarm", vmin=-45,
+            vmax=85, aspect="equal")
         
         plt.colorbar(ca, location="right", shrink=0.90,
             label="RM", drawedges=False, pad=0)
 
-        levels = contour_levels(start, intensity)
+        levels = contour_levels(start, i_data)
         image.contour(
-            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
             colors="k", linewidths=0.5, origin="lower", levels=levels)
         
 
@@ -1065,8 +1032,13 @@ def fixer():
 
     mask = f"{mask_dir}/true_mask.fits"
     jet_mask = f"{mask_dir}/jet.fits"
+    prefix = "01-test"
 
-    rm_map = os.path.join(products, "initial-RM-depth-at-peak-rm.fits")
+    rm_map = os.path.join(products, f"{prefix}-RM-depth-at-peak-rm.fits")
+    fp_map = os.path.join(products, f"{prefix}-FPOL-at-max-lpol.fits")
+    lp_map = os.path.join(products, f"{prefix}-max-LPOL.fits")
+    pangle_map = os.path.join(products, f"{prefix}-PA-pangle-at-peak-rm.fits")
+    
 
     idata = rfu.read_image_cube(cubes[0])["data"]
     qdata = rfu.read_image_cube(cubes[1])["data"]
@@ -1077,31 +1049,14 @@ def fixer():
         "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
         ]
 
-
     for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
-        if not os.path.isdir(o_dir):
-            os.mkdir(o_dir)
+        if not os.path.isdir(os.path.join(PFIGS, o_dir)):
+            os.makedirs(os.path.join(PFIGS, o_dir))
 
-    PaperPlots.figure_5b(
-        imgs[0],
-        f"{products}/spi-fitting/spi-map.alpha.fits", mask, 
-        output="5b-spi-with-contours-mpl.png")
 
-    # PaperPlots.figure_9a(*imgs, mask)
-    # PaperPlots.figure_10(*imgs, mask)
-    # PaperPlots.figure_14(imgs[0], *cubes, mask)
-    
-    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-    #     chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
-    #     vmin=0, vmax=2, scale="linear", cmap="magma")
-    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-    #     chandra_jet=chandra[1], jet_mask=jet_mask,
-    #     output="fig3/chandra-total-intensity-max-1e-1", 
-    #     vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
-    # PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-    #     chandra_jet=chandra[1], jet_mask=jet_mask,
-    #     output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
-    #     scale="power", cmap="magma", kwargs={"gamma": 3.8})
+    # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
     
 
 
@@ -1146,8 +1101,12 @@ def run_paper_mill():
 
     mask = f"{mask_dir}/true_mask.fits"
     jet_mask = f"{mask_dir}/jet.fits"
+    prefix = "01-test"
 
-    rm_map = os.path.join(products, "initial-RM-depth-at-peak-rm.fits")
+    rm_map = os.path.join(products, f"{prefix}-RM-depth-at-peak-rm.fits")
+    fp_map = os.path.join(products, f"{prefix}-FPOL-at-max-lpol.fits")
+    lp_map = os.path.join(products, f"{prefix}-max-LPOL.fits")
+    pangle_map = os.path.join(products, f"{prefix}-PA-pangle-at-peak-rm.fits")
 
     idata = rfu.read_image_cube(cubes[0])["data"]
     qdata = rfu.read_image_cube(cubes[1])["data"]
@@ -1158,62 +1117,66 @@ def run_paper_mill():
         "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
         ]
 
-    for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
-        if not os.path.isdir(o_dir):
-            os.mkdir(o_dir)
+    for o_dir in ["fig3", "fig4", #"fig8", "fig9", "fig10"
+        ]:
+        if not os.path.isdir(os.path.join(PFIGS,o_dir)):
+            os.makedirs(os.path.join(PFIGS,o_dir))
 
 
-    PaperPlots.table2(cubes[0], region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
-    PaperPlots.table3(elobe="east-lobe-cube.fits", wlobe="west-lobe-cube.fits")
+    PaperPlots.table2_core_flux_wfreq(cubes[0], region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
+    PaperPlots.table3_lobe_flux_wfreq(elobe="east-lobe-cube.fits", wlobe="west-lobe-cube.fits")
 
-    PaperPlots.figure_8(*imgs, mask)
-    PaperPlots.figure_9a(*imgs, mask)
-    PaperPlots.figure_10(*imgs, mask)
-    PaperPlots.figure_14(imgs[0], *cubes, mask)
+    PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
+    PaperPlots.figure_10_linear_poln(imgs[0], lp_map, mask)
+    PaperPlots.figure_14_depolarisation(imgs[0], *cubes, mask)
 
 
     PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
-        output="fig3/total-intensity-max2", 
+        output=f"{PFIGS}/fig3/total-intensity-max2", 
         vmin=0, vmax=2, scale="linear", cmap="magma")
 
     PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
-        output="fig3/total-intensity-max-1e-1", 
+        output=f"{PFIGS}/fig3/total-intensity-max-1e-1", 
         vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
 
     PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
-        output="fig3/total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+        output=f"{PFIGS}/fig3/total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
         scale="power", cmap="magma", kwargs={"gamma": 3.8})
 
     # with chandra
     PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
-        chandra_jet=chandra[1], jet_mask=jet_mask, output="fig3/chandra-total-intensity-max2", 
+        chandra_jet=chandra[1], jet_mask=jet_mask,
+        output=f"{PFIGS}/fig3/chandra-total-intensity-max2", 
         vmin=0, vmax=2, scale="linear", cmap="magma")
     PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
         chandra_jet=chandra[1], jet_mask=jet_mask,
-        output="fig3/chandra-total-intensity-max-1e-1", 
+        output=f"{PFIGS}/fig3/chandra-total-intensity-max-1e-1", 
         vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
     PaperPlots.figure_3b_chandra(imgs[0], mask, chandra=chandra[0],
         chandra_jet=chandra[1], jet_mask=jet_mask,
-        output="fig3/chandra-total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+        output=f"{PFIGS}/fig3/chandra-total-intensity-power-scale",
+        vmin=1e-2, vmax=0.55e-1,
         scale="power", cmap="magma", kwargs={"gamma": 3.8})
     
 
     images = {
         # "from_rick/pic-l-all-4k.fits": "fig4/4b-rick-intensity-contours-mpl.png", 
-        "i-mfs.fits": "fig4/4b-intensity-contours-mpl.png",
+        "i-mfs.fits": f"{PFIGS}/fig4/4b-intensity-contours-mpl.png",
         }
 
     for im, out in images.items():
-        PaperPlots.figure_4b(im, mask, output=out)
+        PaperPlots.figure_4b_intensity_contours(im, mask, output=out)
 
-    PaperPlots.figure_5b(
+    PaperPlots.figure_5b_spi_wintensity_contours(
         imgs[0],
         f"{products}/spi-fitting/spi-map.alpha.fits", mask, 
-        output="5b-spi-with-contours-mpl.png")
+        output=f"{PFIGS}/5b-spi-with-contours-mpl.png")
 
     
     # Lobe stuff
-    PaperPlots.figure_12_13(
+    PaperPlots.figure_12_13_rm_lobes_histogram(
         imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
         f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
         f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
@@ -1223,19 +1186,20 @@ def run_paper_mill():
         imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
 
     
-    for _ in range(idata.shape[0]):
-        PaperPlots.figure_8(
-            idata[_], qdata[_], udata[_], mask, output=f"fig8/poln{_}.png")
-        PaperPlots.figure_9a(
-            idata[_], qdata[_], udata[_], mask, output=f"fig9/9a-dop-chan-{_}.png")
-        PaperPlots.figure_10(
-            idata[_], qdata[_], udata[_], mask, output=f"fig10/10-lpol-chan-{_}.png")
+    # for _ in range(idata.shape[0]):
+        # PaperPlots.figure_8_dop_magnetic_fields_contours(
+        #     idata[_], qdata[_], udata[_], mask,
+        #     output=f"{PFIGS}/fig8/poln{_}.png")
+        # PaperPlots.figure_9a_fractional_poln(
+        #     idata[_], qdata[_], udata[_], mask,
+        #     output=f"{PFIGS}/fig9/9a-dop-chan-{_}.png")
+        # PaperPlots.figure_10_linear_poln(
+        #     idata[_], qdata[_], udata[_], mask,
+        #     output=f"{PFIGS}/fig10/10-lpol-chan-{_}.png")
 
     print("----------------------------")
     print("Paper mill stopped")
     print("----------------------------")
-
-
 
 
 def contour_levels(start, data):
@@ -1245,168 +1209,8 @@ def contour_levels(start, data):
     levels = np.ma.masked_greater(levels, np.nanmax(data)).compressed()
     return levels
 
+
 '''
-def add_contours(axis, data, levels=None):
-    """
-    contours: total intensity
-
-    Input
-    -----
-    axis:
-        Mpl axes object onto which to add contours
-    data:
-        Data from which contours will be calculated
-    levels: tuple; optional
-        Levels for the contours
-    """
-
-    # some functions for the contour levels that can be used
-    sqrt = lambda x: np.sqrt(x)
-    linear = lambda x: x
-    square = lambda x: np.square(x)
-    power = lambda x, alpha: ((alpha**x)-1) / (alpha -1)
-
-
-    if levels is None:
-        # setup contour levels factor of root two between n+1 and n
-        levels = contour_levels(0.004, data)
-
-    # contour lines
-    axis.contour(data, colors="k", linewidths=0.5, origin="lower", levels=levels)
-    # ax.clabel(cs, inline=True, fontsize=10)
-
-
-    #filled contours
-    cs = axis.contourf(data, cmap="coolwarm", origin="lower", levels=levels,
-                locator=ticker.LogLocator())
-    plt.colorbar(cs)
-
-    return axis
-    
-
-def add_magnetic_vectors(axis, fpol_data, pangle_data):
-    """
-    vector length: degree of poln (fpol)
-    orientation: position angle
-    """
-    skip = 5
-    slicex = slice(None, fpol_data.shape[0], skip)
-    slicey = slice(None, fpol_data.shape[-1], skip)
-    col, row = np.mgrid[slicex, slicey]
-
-    # get M vector by rotating E vector by 90
-    pangle_data = pangle_data[slicex, slicey] + (np.pi/2)
-    fpol_data = fpol_data[slicex, slicey]
-
-    # normalize this
-    
-    fpol_data = np.ma.masked_greater(fpol_data, 1)
-    scales = fpol_data / fpol_data.max()
-    u = np.cos(pangle_data) * scales
-    v = np.sin(pangle_data) * scales
-
-
-    # ax.contourf(row, col, Z)
-    # plt.axis([2200, 2770, 2050, 2250])
-    qv = axis.quiver(
-        row, col, u, v, angles="xy", pivot='tail', headlength=4,
-        width=0.0008, scale=5, headwidth=0)
-
-    return axis
-
-
-def plot_intensity_vectors(i_name, fpol_name, pa_name, mask=None, oup=None):
-    i_data = rfu.get_masked_data(i_name, mask)
-    fpol_data = rfu.get_masked_data(fpol_name, mask)
-    pa_data = rfu.get_masked_data(pa_name, mask)
-    
-    mask = i_data.mask
-
-    ydim, xdim = np.where(mask == False)
-    wiggle = 10
-    xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
-    ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
-
-    wcs = rfu.read_image_cube(i_name)["wcs"]
-
-    fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
-    ax = set_image_projection(ax)
-
-    ax = add_contours(ax, i_data)
-    ax = add_magnetic_vectors(ax, fpol_data, pa_data)
-    ax.tick_params(axis="x", top=False)
-    ax.tick_params(axis="y", right=False)
-    plt.xlim(*xlims)
-    plt.ylim(*ylims)
-    # fig.tight_layout()
-    oname = oup + f"-intense_mfield.png"
-    print(f"Output is at: {oname}")
-    fig.savefig(oname)
-
-
-
-###################################
-# plot lobes with the histograms left and right
-
-def plot_rm_for_lobes(rot_meas_image, e_mask, w_mask, vmin=None, vmax=None, oup=None, ref_image=None):
-    rot_meas = rfu.read_image_cube(rot_meas_image)["data"]
-    w_lobe_mask = rfu.read_image_cube(w_mask, mask=True)["data"]
-    e_lobe_mask = rfu.read_image_cube(e_mask, mask=True)["data"]
-
-    w_lobe = rfu.get_masked_data(rot_meas_image, w_mask)
-    e_lobe = rfu.get_masked_data(rot_meas_image, e_mask)
-    
-    lobes_mask = np.bitwise_and(w_lobe_mask, e_lobe_mask)
-    lobes = np.ma.masked_array(rot_meas, mask=lobes_mask)
-
-
-    fig = plt.figure(figsize=FIGSIZE)
-    
-    wcs = rfu.read_image_cube(ref_image or rot_meas_image)["wcs"]
-    image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2, projection=wcs)
-    ca = image.imshow(
-        lobes, origin="lower", cmap="magma", vmin=vmin, vmax=vmax, aspect="equal")
-    plt.colorbar(ca, location="right", shrink=0.90, pad=0.01, label="RM", drawedges=False)
-
-    image = set_image_projection(image)
-
-    # swich of these ticks
-    image.tick_params(axis="x", top=False)
-    image.tick_params(axis="y", right=False)
-    # #image.axis("off")
-
-    # so that I can zoom into the image easily and automatically
-    ydim, xdim = np.where(lobes.mask == False)
-    wiggle = 10
-    plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
-    plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
-
-    west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
-    west_hist.hist(w_lobe.compressed(), bins=20, log=True,
-        orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="blue", 
-        histtype="step")
-    west_hist.yaxis.tick_right()
-
-    west_hist.set_title("Western Lobe (Right Hand) RM Distribution")
-    west_hist.xaxis.set_visible(False)
-
-    east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
-    east_hist.hist(e_lobe.compressed(), bins=20, log=False,
-        orientation="vertical", fill=False, ls="--", lw=1, edgecolor="blue",
-        histtype="step")
-    east_hist.xaxis.tick_top()
-    east_hist.set_title("Eastern Lobe (Left Hand) RM Distribution")
-    east_hist.yaxis.set_visible(False)
-    
-    plt.subplots_adjust(wspace=.01, hspace=0)
-
-    fig.tight_layout()
-    oname = oup + f"-lobes_rm{EXT}"
-    fig.savefig(oname)
-    print(f"Output is at: {oname}")
-    
-
-
 def make_masks_from_ricks_data():
 
     fnames = [
@@ -1467,55 +1271,9 @@ if __name__ == "__main__":
 
     run_paper_mill()
 
-    """
-        opts = parser().parse_args()
-
-        # names for the various rm products
-        map_names = {
-            "amp" : f'{opts.prefix}-p0-peak-rm.fits',
-            "angle" : f'{opts.prefix}-PA-pangle-at-peak-rm.fits',
-            "fpol" : f'{opts.prefix}-FPOL-at-center-freq.fits',
-            "rm" : f'{opts.prefix}-RM-depth-at-peak-rm.fits'
-        }
-
-        images = [map_names[_] for _ in "amp angle rm".split()]
-        
-        pica_i_data = rfu.get_masked_data(opts.ref_image, opts.mask_name)
-        pangle_data = rfu.read_image_cube(map_names["angle"])["data"]
-        pica_mask = pica_i_data.mask
-
-        stokes = {}
-        for cube in opts.cube_names:
-            stoke = os.path.basename(cube)[0]
-            stokes[stoke] = rfu.read_image_cube(cube)["data"]
-
-        stokes["l_pol"] = stokes["q"] + 1j*stokes["u"]
-        stokes["f_pol"] = (stokes["q"]/stokes["i"]) + ((1j*stokes["u"])/stokes["i"])
-        
-        # plot lobes and their dispersion
-        plot_rm_for_lobes(
-            rot_meas_image=map_names["rm"],
-            e_mask=opts.elobe_mask, w_mask=opts.wlobe_mask,
-            vmin=-100, vmax=100, oup=opts.prefix, ref_image=opts.ref_image)
-
-
-        # plot fpol
-        plot_fractional_polzn(stokes["f_pol"], oup=opts.prefix, mask=pica_mask,
-            ref_image=opts.ref_image)
-        
-        plot_polarised_intensity(
-            stokes["l_pol"], oup=opts.prefix, ref_image=opts.ref_image,
-            mask=pica_mask)
-
-        plot_intensity_vectors(
-            opts.ref_image, map_names["fpol"], map_names["angle"],
-            mask=opts.mask_name, oup=opts.prefix)
-
-
-        '''
-        Running this script with
-        
-        python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
-        '''
+    """       
+    Running this script with
+    
+    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
 
     """

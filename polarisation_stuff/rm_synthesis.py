@@ -27,7 +27,7 @@ plt.style.use("seaborn")
 
 
 FIGSIZE = (16,9)
-wavelength = lambda x: 3e8/x
+get_wavel = lambda x: 3e8/x
 lw = 1.2
 
 def lambda_to_faraday(lambda_sq, phi_range, lpol):
@@ -251,21 +251,22 @@ def read_npz(fname):
     return datas
 
 
-def max_fdepth(central_freq, chanwidth):
+
+def _max_fdepth(central_freq, chanwidth):
     """
     See Eqn 63 Brentjens
 
     The maximum Faraday depth to which one has more than 50% sensitivity
 
-    central_freq:
-        Central frequency of channel in freq band
+
     chanwidth
         A single channel width in frequency
     """
     
-    delta_lamsq = wavelength(central_freq+chanwidth)**2 -  wavelength(central_freq-chanwidth)**2
+    delta_lamsq = get_wavel(chanwidth)**2
     phi_max = (3**0.5) / delta_lamsq
     return np.abs(phi_max)
+
 
 
 def max_visible_depth_scale(min_freq):
@@ -275,30 +276,59 @@ def max_visible_depth_scale(min_freq):
     min_freq
         Smallest frequency available in the band
     """
-    return np.pi / wavelength(min_freq)**2
+    return np.pi / get_wavel(min_freq)**2
 
 
-def get_rmsf_fwhm(start_band, bandwidth, lambdas=None):
+def fwhm_resolution(min_freq, max_freq):
     """
-    See Eqn 61 Brentjens
-    Approximate FWHM of the main peak of the rmtf
-    start_band
+    Corrected by schintzeler 2008 to 3.8/difference in wavelength squared
+    For originial equation See Eqn 61 Brentjens
+    min_freq
         Initial frequency of the observation band
-    bandwidth:
-        Total frequency bandwidth of the observation
+    max_freq:
+        Where the band ends
     """
-    if lambdas:
-        lambdas = tuple(lambdas)
-        del_lamsq = lambdas[-1] - lambdas[0]
-    else:
-        del_lamsq = wavelength(start_band+bandwidth)**2 - wavelength(start_band)**2
-    fwhm = (2*(3**0.5)) / del_lamsq
-    # fwhm = 3.8 / del_lamsq
-    return fwhm
-
+    # these values will reverse in wavelength because freq and wave are
+    # inversley proportional
+    max_wav = c/min_freq
+    min_wav = c/max_freq
+    bw_wave_sq = max_wav**2 - min_wav**2
+    phi_max = 3.8/bw_wave_sq
+    return phi_max.value
 
 def arg_parser():
-    parse = argparse.ArgumentParser()
+    from textwrap import fill, dedent
+    class BespokeFormatter(argparse.RawDescriptionHelpFormatter):
+        def _fill_text(self, text, width, indent):
+            wrap_width = 80
+            return "_"*wrap_width + "\n\n Description\n\n" +\
+                "\n".join([fill(dedent(_), width=wrap_width,
+                                initial_indent=" ", subsequent_indent="  ",
+                                tabsize=2)
+                            for _ in text.splitlines()]) + \
+                "\n" + "_"*wrap_width
+
+    parse = argparse.ArgumentParser(
+        formatter_class=BespokeFormatter,
+        description="""This script takes in I, Q and U data and does the prcoess
+        of RM-SYNthesis and RM-CLEAN. It gives these outputs.
+
+        Pickle files containing:
+        .\t1. The dirty FDF (Faraday Dispersion Funtion / Faraday spectrum)
+        .\t2. The cleaned FDF
+        .\t3. Faraday depths used
+        
+        These are the keys:
+        .\tdepths
+        .\tfdirty
+        .\tfclean
+        .\trmtf
+
+        Plots of:
+        .\t4. The dirty and clean FDF and position angle vs wavelength sq and its
+        linear squares fit
+        .\t5. The DATAs RMSF
+        """)
     parse.add_argument("-id", "--input-dir", dest="data_dirs", type=str,
         nargs="+",
         help="Directory containing the various data files")
@@ -440,13 +470,32 @@ if __name__ == "__main__":
 SpwID  Name   #Chans   Frame   Ch0(MHz)  ChanWid(kHz)  TotBW(kHz) CtrFreq(MHz)  Corrs          
 0      none      81   TOPO     861.120     10449.219    846386.7   1279.0889   XX  XY  YX  YY
 
+Spectral Windows:  (1 unique spectral windows and 1 unique polarization setups)
+  SpwID  Name   #Chans   Frame   Ch0(MHz)  ChanWid(kHz)  TotBW(kHz) CtrFreq(MHz)  Corrs          
+  0      none    4096   TOPO     856.000       208.984    856000.0   1283.8955   XX  XY  YX  YY
+Sources: 1
 
-46:  1341784179.6875
-47:  1352233398.4375
 
 
-max_fdepth(1341784179.6875, cwid)
-max_fdepth(1352233398.4375, cwid)
-max_visible_depth_scale(861.120e6)
-rmsf_fwhm(861.120e6, 846386.7e3)
+max_visible_depth_scale(861.120e6
+
+
+# get the resolution of the RMSF
+start = 856e6
+end = 856e6 + 856000e3
+fwhm_resolution(start, end)
+we get 41 rad/m2
+
+
+# Get the maximum rm depth
+We can get the max rm allowable for our data from brentjens code
+1. Get the list of input frequencies in ascending order
+2. Convert to lambda square
+3. sort min to max
+4. get the minimum channel width min(waves[:-1] - waves[1:])
+5. divide 2root3 / number 4
+See equation 61
+
+I found this value to be around 3964
+
 """

@@ -984,25 +984,61 @@ class FitsManip:
 
 
 def parser():
-    print(
-        """
-        \r===================================================================+
-        \rExamples                                                           |                 
-        \r========                                                           |                                
-        \r\nplotting only                                                                 |                                        
-        \r    python scrap.py -p 50 20 -t mzima-t10 -plp -piqu --plot-grid   |
-        \r\nstats and plotting                                               |                                             
-        \r    python scrap.py -f clean-small.txt -rs 50 20 -ap \             |
-        \r          -t mzima-t10-v2 --threshold 10 \                         |
-        \r          --noise -0.0004 -ap -plp -piqu                           | 
-        \r\nwith region files                                                |
-        \r      python scrap.py -rf regions/beacons-20-chosen.reg \          |
-        \r        -f clean-small.txt -rs 20 -t chosen --threshold 10         |                                           
-        \r===================================================================+
-        """
-    )
+    from textwrap import fill, dedent
+    class BespokeFormatter(argparse.RawDescriptionHelpFormatter):
+        def _fill_text(self, text, width, indent):
+            wrap_width = 80
+            return "_"*wrap_width + "\n\n Description\n\n" +\
+                "\n".join([fill(dedent(_), width=wrap_width,
+                                initial_indent=" ", subsequent_indent="  ",
+                                tabsize=2)
+                            for _ in text.splitlines()]) + \
+                "\n" + "_"*wrap_width
+
     parsing = argparse.ArgumentParser(usage="%(prog)s [options]", add_help=True,
-        description="Generate Faraday spectra for various LoS from image cubes")
+        formatter_class=BespokeFormatter,
+        description="""
+            Generate I, Q and U data for various LoS from image cubes.
+            
+            This script uses the total intesity MFS image to determine regions
+            of the source with enough SNR and selects those as the lines of sight.
+            For now, this is tuned specifically for Pictor A, but it may be 
+            extended and revised in the future.
+
+            The following could be generated from this script:
+
+            .\t1. Region file containing the selected lines of sight
+            .\t2. Plot showing locations of the regions on the source
+            .\t3. Pickle files containing the following keys for the data:
+            
+                .\t\t- I \t\t - Q \t \t - U
+                .\t\t- i_mfs_noise \t - q_mfs_noise \t - u_mfs_noise
+                .\t\t- I_err \t - Q_err \t - U_err
+                .\t\t- lpol \t\t - lpol_err
+                .\t\t- fpol \t\t - fpol_err
+                .\t\t- pangle \t - pangle_err
+                .\t\t- mask \t\t - freqs
+            .\ti.e for a single line of sight. Each LoS contains data for all
+            .\tthe available channels
+.\t
+            .\t4. Optionaly, generate plots for fractional polarisation vs 
+            lambda squared for each LoS
+                    
+            Examples
+            ========
+
+            plotting only
+            $ python scrap.py -p 50 20 -t mzima-t10 -plp -piqu --plot-grid
+            
+            stats and plotting
+            $ python scrap.py -f clean-small.txt -rs 50 20 -ap 
+                -t mzima-t10-v2 --threshold 10 --noise -0.0004 -ap -plp -piqu
+            
+            with region files
+            $ python scrap.py -rf regions/beacons-20-chosen.reg -f clean-small.txt
+                -rs 20 -t chosen --threshold 10
+            """
+        )
 
     req_parsing = parsing.add_argument_group("Required Arguments")
 

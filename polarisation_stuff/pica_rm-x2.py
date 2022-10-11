@@ -5,9 +5,11 @@ Courtesy of Lerato
 Edited by Lexy
 """
 import argparse
+import logging
 import os
 import time
 import sys
+import warnings
 
 import astropy.io.fits as pyfits
 import numpy as np
@@ -18,6 +20,29 @@ from concurrent import futures
 from functools import partial
 from ipdb import set_trace
 
+def configure_logger(out_dir):
+# ignore overflow errors, assume these to be mostly flagged data
+    warnings.simplefilter("ignore")
+
+    formatter = logging.Formatter(
+        datefmt='%H:%M:%S %d.%m.%Y',
+        fmt="%(asctime)s : %(levelname)s - %(message)s")
+    
+    l_handler = logging.FileHandler(
+        os.path.join(out_dir, "turbo-rm-x2.log"), mode="w")
+    l_handler.setLevel(logging.INFO)
+    l_handler.setFormatter(formatter)
+
+    s_handler = logging.StreamHandler()
+    s_handler.setLevel(logging.INFO)
+    s_handler.setFormatter(formatter)
+
+    logger = logging.getLogger("turbo-rm")
+    logger.setLevel(logging.INFO)
+
+    logger.addHandler(l_handler)
+    logger.addHandler(s_handler)
+    return logger
 
 
 def faraday_to_lambda(lam2, phi_range, pol_lam2):
@@ -105,7 +130,7 @@ def read_data(image, freq=True):
         imslice[-2] = slice(None)
         if freq:
             imslice[-3] = slice(None)
-        print('>>> Image %s loaded sucessfully. '%image)
+        snitch.info('>>> Image %s loaded sucessfully. '%image)
         return imagedata[tuple(imslice)], header
     except OSError:
         sys.exit('>>> could not load %s. Aborting...'%image)
@@ -137,45 +162,45 @@ def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
     """
     x, y = args
 
-    print(f"Processing pixel {x} x {y}")
+    snitch.info(f"Processing pixel {x} x {y}")
     # all freqs single pixel
-    Pol = pdata[:, x, y]    
-    ind_nans =  ~np.isnan(abs(Pol))
-    Pol = Pol[ind_nans]
+    single_pxl_poln = pdata[:, x, y]    
+    ind_nans =  ~np.isnan(abs(single_pxl_poln))
+    single_pxl_poln = single_pxl_poln[ind_nans]
     wave_sq =  wavelengths[ind_nans]
 
-    # RM synth on this single pixel. We pass in the complex polarised data
-    phi_range, fcleaned = rm_synthesis(wave_sq, Pol, phi_max=max_depth,
+    # RM-synth and RM-CLEAN on this single pixel. We pass in the complex polarised data
+    phi_range, fcleaned = rm_synthesis(wave_sq, single_pxl_poln, phi_max=max_depth,
         phi_step=phi_step, niter=niters, gain=0.1, plot=False) 
 
+    abs_fclean = np.abs(fcleaned)
+
     # get the peak index of the clean faraday spectra
-    peak_idx =  np.where(abs(fcleaned) == abs(fcleaned).max())[0]
+    peak_idx =  np.where(abs_fclean == abs_fclean.max())[0][0]
 
     # get the depth at which RM is peak. Is this the estimated RM?
-    peak_depth = phi_range[peak_idx][0]
+    peak_depth = phi_range[peak_idx]
 
     # get the peak complex fclean
-    peak_complex_rm = fcleaned[peak_idx][0]
+    peak_complex_rm = fcleaned[peak_idx]
 
     #this gives the estimated intrinsic fractional polarisation??
     peak_rm_amp = np.abs(peak_complex_rm)
 
     # get the polarisation angle at the peak fday spectrum (intrinsic fpol?)
+    # of that component. Note that this is from the cleaned FDF
     pol_angle = 0.5 *np.arctan2(peak_complex_rm.imag, peak_complex_rm.real)
 
-    # Trying to get the frac pol at the center freq for this x,y pixel
-    nfp = np.abs(fp_data[:, x, y])
-    # nfp_peak_idx = np.where(nfp == nfp.max())
-    # peak_fpol = nfp[nfp_peak_idx][0]
+    # Trying to get the frac pol at max polarised intensity for this x,y pixel
+    # nfp = np.abs(fp_data[:, x, y])
+    nfp = fp_data[:, x, y]
 
-    # use the central freq instead
-    nfp_peak_idx = int(np.ceil(nfp.size/2))
-    peak_fpol = nfp[nfp_peak_idx]
-
-    # if peak_fpol > 1:
-    #     peak_fpol = np.nan
-
-    return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol
+    # get location of peak polzn intensity
+    peak_lpol = np.abs(single_pxl_poln).max()
+    max_pol_idx = np.where(np.abs(single_pxl_poln)==peak_lpol)[0][0]  
+    peak_fpol = nfp[max_pol_idx]
+    snitch.info(f"x: {y}, y:{x}, max polzn intensity @ chan: {max_pol_idx}")
+    return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol, peak_lpol
 
 
 def modify_fits_header(header, ctype='RM', unit='rad/m/m'):
@@ -229,13 +254,15 @@ def main():
 
     # making these global because of multiprocess non-sharing.
     # Global variables can not be modified and shared between different processes
-    global pdata, fp_data
+    global pdata, fp_data, snitch
+
+    snitch = configure_logger(".")
     
     try:
         frequencies = np.loadtxt(args.freq)
     except ValueError:
-        print(">>> Problem found with frequency file. It should be a text file")
-        sys.exit(">>> Exiting. See log file %s" %LOG_FILENAME)
+        snitch.error(">>> Problem found with frequency file. It should be a text file")
+        sys.exit(">>> Exiting. See log file 'turbo-rm.log'")
     
 
     wavelengths =  (299792458.0/frequencies)**2 
@@ -256,6 +283,7 @@ def main():
     PA_map = np.zeros([N2, N3])
     RM_map = np.zeros([N2, N3])
     fp_map = np.zeros([N2, N3])
+    lp_map = np.zeros([N2, N3])
 
     
     #q_cube = np.zeros([N1, N2, N3])
@@ -292,6 +320,7 @@ def main():
         PA_map[an] = results[_][1]
         RM_map[an] = results[_][2]
         fp_map[an] = results[_][4]
+        lp_map[an] = results[_][5]
 
     
     
@@ -308,9 +337,12 @@ def main():
     # polarised flux
     pf_hdr = modify_fits_header(qhdr, ctype='FPOL', unit='x100%')
 
+    # polarise intensity
+    lp_hdr = modify_fits_header(qhdr, ctype='LPOL', unit='unit')
+
     # Amplitude of the clean peak RM (intrinsic fpol)
     pyfits.writeto(
-        args.prefix + '-p0-peak-rm.fits', p0_map, p0_hdr, overwrite=True)
+        args.prefix + '-p0-peak-FDF.fits', p0_map, p0_hdr, overwrite=True)
 
     # pol angle at peak RM (polarisation angle)
     pyfits.writeto(
@@ -324,10 +356,15 @@ def main():
 
     #frac pol at central freq
     pyfits.writeto(
-        args.prefix + '-FPOL-at-center-freq.fits', fp_map, pf_hdr,
+        args.prefix + '-FPOL-at-max-lpol.fits', fp_map, pf_hdr,
+        overwrite=True)
+    
+     #frac pol at central freq
+    pyfits.writeto(
+        args.prefix + '-max-LPOL.fits', lp_map, lp_hdr,
         overwrite=True)
 
-    print("Donesies!")
+    snitch.info("Donesies!")
 
     #pyfits.writeto(args.prefix + '-qFAR.fits', q_cube, qhdr, overwrite=True)
     #pyfits.writeto(args.prefix + '-uFAR.fits', u_cube, qhdr, overwrite=True)
