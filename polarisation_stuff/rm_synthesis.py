@@ -354,7 +354,7 @@ if __name__ == "__main__":
     opts = arg_parser().parse_args()
 
     for _i, data_dir in enumerate(opts.data_dirs):
-        output_dir = f"{opts.output_dir}-dir{_i}"
+        output_dir = f"{opts.output_dir}-{os.path.basename(data_dir)}"
     
         if not os.path.isdir(output_dir):
             os.makedirs(output_dir)
