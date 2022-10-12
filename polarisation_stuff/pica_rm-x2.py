@@ -273,9 +273,7 @@ def main():
 
     if args.ifits:
         idata, ihdr = read_data(args.ifits) # run I-cube
-        # fp_data = (qdata/idata) + 1j * (udata/idata)
         fp_data = np.abs(pdata) / idata
-        # high point[6, 224, 111] 
 
  
     N1, N2, N3 = qdata.shape

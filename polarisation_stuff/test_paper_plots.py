@@ -861,6 +861,93 @@ class PaperPlots:
 
 
     @staticmethod
+    def figure_rm_map_b_with_mf(i_image, rm_map, angle_image, mask, start=0.004, smooth_sigma=1,
+        output=f"{PFIGS}/rm-map-wmf.png"):
+        """
+        Plot the RM-MAP
+        Only where the total intensity is greater thab start
+        """
+        i_data = rfu.get_masked_data(i_image, mask)
+
+        if isinstance(rm_map, str):
+            rm_data = rfu.get_masked_data(rm_map, mask)
+        else:
+            rm_data = rm_map
+
+        if isinstance(angle_image, str):
+            angle_data = rfu.get_masked_data(angle_image, mask)
+        else:
+            angle_data = angle_image
+        
+        if isinstance(mask, str):
+            mask_data = fits.getdata(mask).squeeze()
+            mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+        else:
+            mask_data = rm_data.mask
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
+        # base the masks for the rest on I
+        rm_data = np.ma.masked_where(i_data<start, rm_data)
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 20
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        
+        cs = ax.imshow(rm_data, origin="lower", cmap="coolwarm", 
+            aspect="equal", vmin=-45, vmax=85)
+
+
+        # the image data
+        levels = contour_levels(start, i_data)
+        ax.contour(i_data,
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+
+
+        #################################
+        skip = 7
+        slicex = slice(None, angle_data.shape[0], skip)
+        slicey = slice(None, angle_data.shape[-1], skip)
+        col, row = np.mgrid[slicex, slicey]
+
+        # get M vector by rotating E vector by 90
+        angle_data = angle_data[slicex, slicey]
+
+        # nornalize this, lenght of the vector
+        scales = 0.05
+    
+        # scale as amplitude
+        u = scales * np.cos(angle_data)
+        v = scales * np.sin(angle_data)
+
+        qv = ax.quiver(
+            row, col, u, v, angles="xy", pivot='tail', headlength=4,
+            width=0.0012, scale=5, headwidth=2, color="black")
+
+        plt.colorbar(cs, label="Rotation Measure", pad=0)
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
+        
+        print(f"Saving plot: {output}")
+        plt.savefig(output, dpi=DPI)
+        plt.close("all")
+
+
+
+    @staticmethod
     def figure_14_depolarisation(intensity, i_cube, q_cube, u_cube, mask, start=0.004,
         smooth_sigma=1, output=f"{PFIGS}/14-depolzn.png"):
         """
@@ -1032,7 +1119,7 @@ def fixer():
 
     mask = f"{mask_dir}/true_mask.fits"
     jet_mask = f"{mask_dir}/jet.fits"
-    prefix = "01-test"
+    prefix = "initial"
 
     rm_map = os.path.join(products, f"{prefix}-RM-depth-at-peak-rm.fits")
     fp_map = os.path.join(products, f"{prefix}-FPOL-at-max-lpol.fits")
@@ -1055,8 +1142,9 @@ def fixer():
 
 
     # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
-    PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
     # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
+    PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
     
 
 
@@ -1101,7 +1189,7 @@ def run_paper_mill():
 
     mask = f"{mask_dir}/true_mask.fits"
     jet_mask = f"{mask_dir}/jet.fits"
-    prefix = "01-test"
+    prefix = "initial"
 
     rm_map = os.path.join(products, f"{prefix}-RM-depth-at-peak-rm.fits")
     fp_map = os.path.join(products, f"{prefix}-FPOL-at-max-lpol.fits")
@@ -1182,8 +1270,9 @@ def run_paper_mill():
         f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
         f"{mask_dir}/true_mask.fits")
 
-    PaperPlots.figure_rm_map(
-        imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
+    PaperPlots.figure_rm_map(imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
+    
+    PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
 
     
     # for _ in range(idata.shape[0]):
