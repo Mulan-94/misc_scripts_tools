@@ -28,6 +28,7 @@ from time import perf_counter
 from itertools import product, chain
 from regions import Regions, PixCoord, CirclePixelRegion, RectanglePixelRegion
 from pprint import pformat
+from matplotlib import colors
 from ipdb import set_trace
 
 
@@ -125,7 +126,7 @@ class IOUtils:
         return regs
 
     @classmethod
-    def write_valid_regions(cls, regfile, fname, threshold=20, overwrite=True):
+    def write_valid_regions(cls, regfile, fname, threshold=20, min_rnoise=None, overwrite=True):
 
         if overwrite:
             # read whatever was written out to begin witfromh
@@ -139,7 +140,10 @@ class IOUtils:
 
             regs = IOUtils.read_region_as_pixels(regfile, wcs)
             noise_fname = os.path.join(os.path.dirname(regfile), "noise_area.reg")
-            noise_reg, = IOUtils.read_region_as_pixels(noise_fname, wcs)
+            if min_rnoise is None:
+                noise_reg, = IOUtils.read_region_as_pixels(noise_fname, wcs)
+            else:
+                noise_reg = min_rnoise
 
             #identify what is thought to be valid
             chosen = []
@@ -200,6 +204,7 @@ class IOUtils:
 
         ax = ax.flatten()
         snitch.info("Plotting selected regions over I (Q, U) images")
+        i_data = None
         for _, im in enumerate("iqu"):
             image = os.path.join(os.path.dirname(fname),f"{im}-mfs.fits")
             # ignore if this file does not exist
@@ -208,15 +213,22 @@ class IOUtils:
                 continue
 
             data = fits.getdata(f"{im}-mfs.fits").squeeze()
-
-            data = np.ma.masked_less(np.abs(data), noise*threshold)
+            
+            if im == "i":
+                data = np.ma.masked_less(np.abs(data), noise*threshold)
+                i_data = data
+            else:
+                data = np.ma.masked_array(data=data, mask=i_data.mask)
 
             lims = np.array([_.center.xy for _ in regs], dtype=int)
             xmin, ymin = np.min(lims, axis=0)
             xmax, ymax = np.max(lims, axis=0)
             wiggle = 50
             
-            ax[_].imshow(np.log(data), origin="lower", cmap="coolwarm")                
+            ax[_].imshow(data, origin="lower", cmap="coolwarm",
+            norm=colors.LogNorm(vmin=data.min(), vmax=data.max())
+            # vmin=data.min(), vmax=data.max()
+            ) 
             ax[_].set_title(im)
             ax[_].set_xlim(xmin-wiggle, xmax+wiggle)
             ax[_].set_ylim(ymin-wiggle, ymax+wiggle)
@@ -835,8 +847,11 @@ class FitsManip:
             return im_data
         
         #Using the center pixel
-        cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
-        flux_jybm = intense_cut[cpixx, cpixy]
+        # cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
+        # flux_jybm = intense_cut[cpixx, cpixy]
+        ban = intense_cut.compressed()
+        flux_jybm = ban[ban.size//2]
+
 
         if (np.abs(flux_jybm) > sig_factor * image_noise):
             im_data["flux_jybm"] = flux_jybm
@@ -962,7 +977,7 @@ class FitsManip:
                 fout["mask"] = mask
 
                 # if not all data is flagged and flagged data is less than 50%
-                if mask.sum() != mask.size and (mask.sum()<mask.size*0.5):
+                if mask.sum() != mask.size and (mask.sum()<mask.size*0.7):
                     if mask.sum()>0:
                         snitch.warning(f"{reg.meta['text']}: flagged {mask.sum()}/{mask.size} points")
                     out_dir = IOUtils.make_out_dir(
@@ -1062,7 +1077,13 @@ def parser():
     opt_parsing.add_argument("-rf", "--region-file", dest="reg_file", type=str,
         default=None, metavar="", 
         help="An input region file. Otherwise, one will be auto-generated.")
-    
+    opt_parsing.add_argument("-mrn", "--minimum-region-noise", dest="mrn", type=float,
+        default=None, metavar="", 
+        help="""If signal is above this noise * threshold in the I-MFS image,
+        that will be set as a valid region. Otherwise we get noise automatically
+        from an off source region in I-MFS. Note that It is used in conjunction with
+        --threshold.
+        """)
     opt_parsing.add_argument("-rs", "--region-size", dest="reg_size", nargs="+",
         type=int, default=[], metavar="", 
         help=("Create regions of this circle radius and perform analyses on them."+
@@ -1183,9 +1204,9 @@ if __name__ == "__main__":
                 # because not user specified, I can edit however I want
                 # will use the wcs ref as where to determin noise
                 # this must be the I-MFS image
-                snitch.warning(f"Using the noise from :   {nrfs[0]} to generate regions")
+                snitch.warning(f"Using the noise from :   {nrfs[0]} to generate regions.")
                 IOUtils.write_valid_regions(reg_file, fname=nrfs[0],
-                    threshold=opts.thresh, overwrite=opts.noverwrite)
+                    threshold=opts.thresh, min_rnoise=opts.mrn, overwrite=opts.noverwrite)
 
             
             ref_wcs = IOUtils.get_wcs(opts.wcs_ref)
@@ -1195,13 +1216,14 @@ if __name__ == "__main__":
             snitch.info(f"With {len(regs)} regions")
             snitch.info(f"And {len(images)} images ({len(images)//3} X IQU)")
 
-            if opts.noise:
-                global_noise = [opts.noise]*3 if len(opts.noise)==1 else opts.noise
-                global_noise = {_i: _n for _i, _n in zip("iqu", global_noise)}
-            else:
-                noise_reg, = IOUtils.read_region_as_pixels(
+            noise_reg, = IOUtils.read_region_as_pixels(
                     os.path.join(os.path.dirname(reg_file), "noise_area.reg"),
                     ref_wcs)
+
+            if opts.noise:
+                global_noise = [opts.noise[0]]*3 if len(opts.noise)==1 else opts.noise
+                global_noise = {_i: _n for _i, _n in zip("iqu", global_noise)}
+            else:
                 snitch.info(f"Getting RMS noise(s) from {', '.join(opts.nrfs)}")
                 global_noise = {}
                 for _i , nrf in zip("iqu", sorted(opts.nrfs)):
@@ -1215,15 +1237,13 @@ if __name__ == "__main__":
                 snitch.warning(f"Noise for {_k}-mfs :   {_v:8.8f}")
                 snitch.warning(f"Noise threshold {_k}-mfs :   {opts.thresh*_v:8.8f}")  
             snitch.warning("...............................................")
-            
             IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, _noise_ref, opts.thresh)
+                    reg_file, opts.wcs_ref, opts.mrn or _noise_ref, opts.thresh)
             if opts.r_only:
                 snitch.warning("Generated regions only as per request")
                 continue
             
 
-            
             fpol_filter = FitsManip.get_image_stats2(
                 file_core, images, regs, global_noise, noise_reg,
                 sig_factor=opts.thresh, output_dir=opts.output_dir)
@@ -1245,7 +1265,7 @@ if __name__ == "__main__":
                     fname.writelines(edited)
                 
                 IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, _noise_ref, opts.thresh)
+                    reg_file, opts.wcs_ref, opts.mrn or _noise_ref, opts.thresh)
 
 
             if opts.auto_plot:
