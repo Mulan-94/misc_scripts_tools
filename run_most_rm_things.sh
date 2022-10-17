@@ -20,6 +20,20 @@ echo "e.g"
 echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks-572"
 echo -e "\t ./run_most_rm_things.sh /home/andati/pica/reduction/experiments/emancipation/masks"
 
+
+export orig_cubes="intermediates/original-cubes";
+export sel_cubes="intermediates/selection-cubes";
+export conv_cubes="intermediates/conv-selection-cubes";
+export plots="intermediates/beam-plots";
+export prods="products";
+export spis="products/spi-fitting";
+
+echo -e "\n############################################################"
+echo "Make these directories";
+echo -e "############################################################\n"
+mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
+
+
 echo -e "\n############################################################"
 echo -e "Reading the mask dir"
 echo -e "############################################################\n"
@@ -71,20 +85,9 @@ fi
 sel=($(echo $(cat selected-channels.txt)))
 
 
-export orig_cubes="intermediates/original-cubes";
-export sel_cubes="intermediates/selection-cubes";
-export conv_cubes="intermediates/conv-selection-cubes";
-export plots="intermediates/beam-plots";
-export prods="products";
-export spis="products/spi-fitting";
-
 echo -e "\n############################################################"
-echo "Make these directories";
+echo "Getting staarted"
 echo -e "############################################################\n"
-mkdir -p $orig_cubes $sel_cubes $conv_cubes $plots $prods $spis;
-
-
-
 for s in $stokes;
 	do
 		echo "make cubes from ALL the output images: ${s^^}";
@@ -197,9 +200,9 @@ echo -e "############################################################\n"
 export data_suffix="circle-t20";
 
 
-# I change region size from 5pix to 3 pixels
-python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --threshold 10 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits
-
+# I change region size from 5pix to 3 pixels.
+# Set minimum noise*threshold above which to generate regions
+python qu_pol/scrap.py -rs 3 -t $data_suffix -f selected-freq-images.txt --threshold 10 --output-dir $prods/scrap-outputs -wcs-ref i-mfs.fits -mrn 0.0006
 
 
 echo -e "\n############################################################"
@@ -239,7 +242,7 @@ python qu_pol/bokeh/plot_bk.py -id $prods/scrap-outputs/*$data_suffix --yaml qu_
 
 
 echo -e "\n############################################################"
-echo "Do some RM maps, fpol maps and other maps";
+echo "Do some RM maps, fpol maps and other maps for each pixel";
 echo "Using my mask here, Don't know where yours is but if this step fails, check on that";
 echo "Default maximum depth and number of iterations same as that of previous"
 echo -e "############################################################\n"

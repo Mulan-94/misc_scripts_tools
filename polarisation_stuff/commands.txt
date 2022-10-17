@@ -14,3 +14,10 @@ python rm_synthesis.py -id IQU-regions-mpc-*-circles -md 1200
 python plot_bk.py -id IQU-regions-mpc-*-circles --yaml plots.yml 
 
 python pica_rm.py -i I-image-cubes.fits -q Q-image-cubes.fits -u U-image-cubes.fits -f Frequencies-PicA-Masked.txt -ncore 60 -mask 572-mask.fits 
+
+
+
+python ../qu_pol/FIT-QU-CUBE-RANDOM.py -q q-image-cube.fits -u u-image-cube.fits -i i-image-cube.fits -ncore 60 -mask $mask_dir/true_mask.fits -o qu-fit-out/qufit -f frequencies.txt -n noises.txt -rmimg initial-p0-peak-rm.fits -pmaximg initial-FPOL-at-max-lpol.fits
+
+
+python ../qu_pol/x2-FIT-QU-CUBE-RANDOM.py -q q-image-cube.fits -u u-image-cube.fits -i i-image-cube.fits -ncore 60 -mask $mask_dir/true_mask.fits -o qu-fit-x2-out/qufit -f frequencies.txt -n noises.txt -rmimg initial-p0-peak-rm.fits -pmaximg initial-FPOL-at-max-lpol.fits

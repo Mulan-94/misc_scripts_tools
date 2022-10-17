@@ -14,6 +14,7 @@ import os
 import regions
 import matplotlib.pyplot as plt
 import numpy as np
+import shutil
 import warnings
 
 # from casatasks import imstat
@@ -37,7 +38,7 @@ plt.style.use("bmh")
 light_speed = 3e8
 marker_size = 10
 FPOL_FILTER = []
-
+MFT = 0.7
 
 def configure_logger(out_dir):
 # ignore overflow errors, assume these to be mostly flagged data
@@ -220,7 +221,7 @@ class IOUtils:
             else:
                 data = np.ma.masked_array(data=data, mask=i_data.mask)
 
-            lims = np.array([_.center.xy for _ in regs], dtype=int)
+            lims = np.array([_.center.xy for _ in chosen], dtype=int)
             xmin, ymin = np.min(lims, axis=0)
             xmax, ymax = np.max(lims, axis=0)
             wiggle = 50
@@ -290,6 +291,22 @@ class IOUtils:
             return wcs.pixel_shape
         else:
             return wcs
+    
+    @staticmethod
+    def write_noise_region(reg_fname):
+        snitch.warning("Also writting default noise region")
+        header = [
+            "# Region file format: DS9 CARTA 2.0.0",
+            ('global color=#2EE6D6 dashlist=8 3 width=2 ' +
+            'font="helvetica 10 normal roman" select=1 highlite=1 dash=0 fixed=0 ' +
+            'edit=1 move=1 delete=1 include=1 source=1'),
+            "FK5"
+        ]
+
+        with open(os.path.join(os.path.dirname(reg_fname), "noise_area.reg"), "w") as fil:
+            fil.writelines(
+                [p+"\n" for p in header+["circle(80.041875, -45.713452, 13.0000\")"]])
+            snitch.info("Noise region written")
 
     @staticmethod
     def generate_regions(reg_fname, wcs_ref, factor=50, overwrite=True):
@@ -373,11 +390,7 @@ class IOUtils:
             snitch.warning(f"File already available at: {reg_fname}")
 
         
-        snitch.warning("Also writting default noise region")
-        with open(os.path.join(os.path.dirname(reg_fname), "noise_area.reg"), "w") as fil:
-            fil.writelines(
-                [p+"\n" for p in header+["circle(80.041875, -45.713452, 13.0000\")"]])
-            snitch.info("Noise region written")
+        IOUtils.write_noise_region(reg_fname)
             
         return reg_fname
 
@@ -977,7 +990,7 @@ class FitsManip:
                 fout["mask"] = mask
 
                 # if not all data is flagged and flagged data is less than 50%
-                if mask.sum() != mask.size and (mask.sum()<mask.size*0.7):
+                if (mask.sum() <= mask.size*MFT):
                     if mask.sum()>0:
                         snitch.warning(f"{reg.meta['text']}: flagged {mask.sum()}/{mask.size} points")
                     out_dir = IOUtils.make_out_dir(
@@ -987,7 +1000,7 @@ class FitsManip:
                 else:
                     snitch.warning(
                         f"{reg.meta['text']}: flagged {mask.sum()}/{mask.size} points. " + 
-                        "Skipping because >50% flagged, or not enough data.")
+                        F"Skipping because >{MFT*100}% flagged, or not enough data.")
                     FPOL_FILTER.append(reg.meta['text'])
             else:
                 snitch.warning(f"Skipping because there's no valid data in this region.")
@@ -1070,6 +1083,17 @@ def parser():
     # Optional arguments
     opt_parsing = parsing.add_argument_group("Optional Arguments")
 
+    opt_parsing.add_argument("-mft", "--minimum-flag-threshold", dest="mft",
+    type=float, default=None, help="""
+    Fraction of flags above which lines of sight should be ignored.  
+    Can be useful if you want to plot all the generated LOS. Otherwise, they
+    will be filtered out. The simple filter is that where values of fractional
+    polarisation i are >1 or <0, this data is 'flagged'.
+    behaviour: flag size > 0.7 of total data is flagged, ingore. 
+    Max is 1, min is >0.
+    Default 0.7
+    """
+    )
     opt_parsing.add_argument("--noverwrite", dest="noverwrite", action="store_false",
         help="Do not ovewrite everything along the way")
     opt_parsing.add_argument("-ro", "--regions-only", dest="r_only",
@@ -1157,6 +1181,8 @@ if __name__ == "__main__":
     opts = parser().parse_args()
     snitch = configure_logger(opts.output_dir)
     
+    MFT = opts.mft if opts.mft else MFT
+
     if opts.testing is None:
         testing = ""
     else:
@@ -1191,8 +1217,11 @@ if __name__ == "__main__":
             images = IOUtils.read_sorted_filnames(opts.in_list)
             nrfs = sorted(opts.nrfs)
             
+            reg_dir = IOUtils.make_out_dir(os.path.join(opts.output_dir, "regions"))
             if opts.reg_file:
-                reg_file = opts.reg_file
+                reg_file = shutil.copy(opts.reg_file, reg_dir)
+                IOUtils.write_noise_region(reg_file)
+                # reg_file = os.path.basename(opts.reg_file)
                 snitch.warning(f"Using {reg_file} as region file")
             else:
                 # factor here is the size of radius of box or circle
@@ -1252,15 +1281,24 @@ if __name__ == "__main__":
                 snitch.warning("Removing the following regions: ")
                 snitch.warning(pformat(" ".join(fpol_filter), compact=True, width=100))
                 with open(reg_file, "r") as fname:
-                    edited = {i: x for i, x in enumerate(fname.readlines())}
+                    edited = dict()
+                    for i, x in enumerate(fname.readlines()):
+                        if i <3:
+                            key = f"l{i}"
+                        else:
+                            key = int(x.split("{")[-1].split("}")[0].split("_")[-1])
+                        edited[key] = x
+
                 for _ in fpol_filter:
                     # coz list indexing starts from 0
-                    del edited[int(_.split("_")[-1]) + 2]
+                    del edited[int(_.split("_")[-1])]
 
                 edited = list(edited.values())
                 for _, _x in enumerate(edited[3:], 3):
                      edited[_] = edited[_].split("#")[0] + f"# {_-2},los\n"
 
+                # retain the original region file and write into moded one
+                _=shutil.copy(reg_file, os.path.splitext(reg_file)[0]+"-orig.reg")
                 with open(reg_file, "w") as fname:
                     fname.writelines(edited)
                 
