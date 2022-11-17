@@ -22,11 +22,71 @@ import random_fits_utils as rfu
 from ipdb import set_trace
 
 
+"""
+A perfect reference for the quiver API
+
+- https://www.pythonpool.com/matplotlib-quiver/
+
+
+The following two snippets of code generate the same result. The only difference
+is that:
+
+1. This snippet provides values for:
+  - the x- and y- coordinates of where the vectors will be located
+  - With an assumed vector magnitude of 1, the x and y resolved components
+    of the vector
+    (u, v)
+
+2. This snippet provides values for:
+  - The magnitude of the vectors in x and y (u, v)
+  - The orientation of the vector specified as an ANGLE!
+
+Therefore, if we want all the vectors to have the same magnitudes but different
+ orientation
+Snippet 2 is the best obvious choice. Otherwise, if we want to vary the
+ magnitudes of the vectors, choose snippet 1.
+
+IF YOU USE ANGLES, SET U AND V TO 1
+IF YOU USE RESOLVED U AND V, DON'T USE ANGLES. TOO MUCH WORK
+
+# polarization angle starts from 0 North, apply this offset
+ANGLE_OFFSET = 90
+
+specs = dict(pivot='tail', headlength=0, width=0.012, scale=5, headwidth=1)
+
+# snippet 1: same origin, different orientations
+plt.quiver(0, 0, np.sin(0), np.cos(0),**specs, color="red");
+plt.quiver(0, 0, np.sin(45), np.cos(45),**specs, color="green");
+plt.quiver(0, 0, np.sin(90), np.cos(90),**specs, color="black");
+
+
+
+# snippet 2: arbitrary origin, same manitude, different orientations, we can 
+# specify the origins here. If we use angles, we don't have to resolve the x 
+# and y components
+plt.quiver(1, 1, angles=[0 + ANGLE_OFFSET],**specs, color="red");
+plt.quiver(1, 1, angles=[45 + ANGLE_OFFSET],**specs, color="green");
+plt.quiver(1, 1, angles=[90 + ANGLE_OFFSET],**specs, color="black");
+
+# ANGLES MUST BE IN DEGREES!
+
+! PolarIZATION ANGLE STARTS FROM THE NORTH!!!!!!!
+https://link.springer.com/content/pdf/10.1007/s10686-016-9517-y.pdf
+"""
+
+
 warnings.filterwarnings("ignore", module="astropy")
 
 FIGSIZE = (16,9)
 EXT = ".png"
 DPI = 100
+
+# by how much to rotate the e vectors
+ROT = 90
+
+#For Polarization angles IAU Convention for 0 degree is at NORT, 
+# but angles in matplotlIb start at x=0. Thus correct angle must be offset
+ANGLE_OFFSET = 90
 
 # Where we are dumping the output
 PFIGS = "paper-figs"
@@ -482,10 +542,13 @@ class PaperPlots:
     
         
         i_data = np.ma.masked_where(i_data<start, i_data)
+
+        if "rad" in fits.getheader(angle_image)["BUNIT"].lower():
+            angle_data = np.rad2deg(angle_data)
         
         # base the masks for the rest on I
         fp_data = np.ma.masked_where(i_data<start, fp_data)
-        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + ANGLE_OFFSET + ROT
 
         wcs = rfu.read_image_cube(mask)["wcs"]
         
@@ -528,10 +591,11 @@ class PaperPlots:
         # scale as amplitude
         u = scales * np.cos(angle_data)
         v = scales * np.sin(angle_data)
+        # u = v = np.ones_like(angle_data) * scales
 
         qv = ax.quiver(
-            row, col, u, v, angles="xy", pivot='tail', headlength=4,
-            width=0.0012, scale=20, headwidth=2, color="black")
+            row, col, u, v, angles=angle_data, pivot='tail', headlength=0,
+            width=0.0012, scale=20, headwidth=1, color="black")
         
         #################################
 
@@ -584,10 +648,13 @@ class PaperPlots:
             i_data = np.ma.masked_array(i_data, mask=mask_data)
         
         i_data = np.ma.masked_where(i_data<start, i_data)
+
+        if "rad" in fits.getheader(angle_image)["BUNIT"].lower():
+            angle_data = np.rad2deg(angle_data)
         
         # base the masks for the rest on I
         fpol_data = np.ma.masked_where(i_data<start, fpol_data)
-        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + ANGLE_OFFSET + ROT
 
         wcs = rfu.read_image_cube(mask)["wcs"]
         
@@ -626,15 +693,17 @@ class PaperPlots:
         angle_data = angle_data[slicex, slicey]
 
         # nornalize this, lenght of the vector
-        scales = 0.05
+        scales = 0.03
     
         # scale as amplitude
-        u = scales * np.cos(angle_data)
-        v = scales * np.sin(angle_data)
+        # u = scales * np.cos(angle_data)
+        # v = scales * np.sin(angle_data)
+        u = v = np.ones_like(angle_data) * scales
+        
 
         qv = ax.quiver(
-            row, col, u, v, angles="xy", pivot='tail', headlength=4,
-            width=0.0012, scale=5, headwidth=2, color="black")
+            row, col, u, v, angles=angle_data, pivot='tail', headlength=0,
+            width=0.0012, scale=5, headwidth=1, color="black")
         
         #################################
 
@@ -888,7 +957,12 @@ class PaperPlots:
         i_data = np.ma.masked_where(i_data<start, i_data)
         # base the masks for the rest on I
         rm_data = np.ma.masked_where(i_data<start, rm_data)
-        angle_data = np.ma.masked_where(i_data<start, angle_data) + (np.pi/2)
+
+        if "rad" in fits.getheader(angle_image)["BUNIT"].lower():
+            angle_data = np.rad2deg(angle_data)
+
+
+        angle_data = np.ma.masked_where(i_data<start, angle_data) + ANGLE_OFFSET + ROT
 
         ydim, xdim = np.where(mask_data == False)
         wiggle = 20
@@ -921,16 +995,21 @@ class PaperPlots:
         angle_data = angle_data[slicex, slicey]
 
         # nornalize this, lenght of the vector
-        scales = 0.05
+        scales = 0.03
     
         # scale as amplitude
-        u = scales * np.cos(angle_data)
-        v = scales * np.sin(angle_data)
+        # u = scales * np.cos(angle_data)
+        # v = scales * np.sin(angle_data)
+        u = v = np.ones_like(angle_data) * scales
 
-        qv = ax.quiver(
-            row, col, u, v, angles="xy", pivot='tail', headlength=4,
-            width=0.0012, scale=5, headwidth=2, color="black")
+        qv = ax.quiver( 
+            row, col, 
+            u, v, 
+            angles=angle_data,
+            pivot='tail', headlength=0,
+            width=0.0012, scale=5, headwidth=1, color="black")
 
+ 
         plt.colorbar(cs, label="Rotation Measure", pad=0)
         
         ax.tick_params(axis="x", top=False)
@@ -1125,6 +1204,7 @@ def fixer():
     fp_map = os.path.join(products, f"{prefix}-FPOL-at-max-lpol.fits")
     lp_map = os.path.join(products, f"{prefix}-max-LPOL.fits")
     pangle_map = os.path.join(products, f"{prefix}-PA-pangle-at-peak-rm.fits")
+    # pangle_map = "rm-tools-test/no-f/pangle-FDF.fits"
     
 
     idata = rfu.read_image_cube(cubes[0])["data"]
@@ -1144,7 +1224,19 @@ def fixer():
     # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
     # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
     # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
-    PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
+    # PaperPlots.figure_rm_map(imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
+    # PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
+
+    tloops = [
+        # "rm-tools-test/cirada-rm-no-f/heres-polAngle0Fit_deg.fits",
+        # "rm-tools-test/pipe-3d-out/q-image-cube_polAngle0Fit_deg.fits",
+        # "rm-tools-test/lim-4k.fits",
+        pangle_map,
+    ]
+    for _t, tloop in enumerate(tloops):
+        PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, 
+            tloop,
+            mask, output=f"rmap_with_vecs-ROT-{ROT}-{_t}")
     
 
 

@@ -17,7 +17,54 @@ python pica_rm.py -i I-image-cubes.fits -q Q-image-cubes.fits -u U-image-cubes.f
 
 
 
-python ../qu_pol/FIT-QU-CUBE-RANDOM.py -q q-image-cube.fits -u u-image-cube.fits -i i-image-cube.fits -ncore 60 -mask $mask_dir/true_mask.fits -o qu-fit-out/qufit -f frequencies.txt -n noises.txt -rmimg initial-p0-peak-rm.fits -pmaximg initial-FPOL-at-max-lpol.fits
-
-
+# From Lerato's script
 python ../qu_pol/x2-FIT-QU-CUBE-RANDOM.py -q q-image-cube.fits -u u-image-cube.fits -i i-image-cube.fits -ncore 60 -mask $mask_dir/true_mask.fits -o qu-fit-x2-out/qufit -f frequencies.txt -n noises.txt -rmimg initial-p0-peak-rm.fits -pmaximg initial-FPOL-at-max-lpol.fits
+
+
+# unstack the imagee cubes
+fitstool.py --unstack=q-image-cube:FREQ:1 ../q-image-cube.fits 
+
+
+# from here https://github.com/brentjens/rm-synthesis
+"""
+# First
+
+from astropy.io import fits
+for _ in "qu":
+  hd1 = fits.getheader(f"{_}-image-cube.fits")
+  dt1 = fits.getdata(f"{_}-image-cube.fits").squeeze()
+  del hd1["NAXIS4"]
+  del hd1["CTYPE4"]
+  del hd1["CRPIX4"]
+  del hd1["CRVAL4"]
+  del hd1["CDELT4"]
+  del hd1["CUNIT4"]
+  hd1["NAXIS"] = 3
+
+  fits.writeto(filename=f"{_}-mod.fits", data=dt1, header=hd1)
+  print("Done")
+"""
+rmsynthesis q-mod.fits u-mod.fits frequencies.txt --low -400 --high 400 -o brentjents-rm-synth/ --dphi 1
+
+rmsf = np.loadtxt("brentjents-rm-synth/rmsf.txt")
+depth, re, im = rmsf[:,0], rmsf[:,1], rmsf[:,2]
+amp = np.abs((re + 1j*im))
+plt.plot(depth, amp)
+plt.plot(depth, re, "k--")
+plt.plot(depth, im, "b--")
+plt.savefig("rmsf.png")
+
+
+
+# WITH RM-SYnth
+rmsynth3d q-image-cube.fits u-image-cube.fits frequencies.dat -i i-image-cube.fits -l 400
+
+# 
+rmclean3d FDF_im_dirty.fits RMSF_FWHM.fits
+
+# compare the reuslts with and without derotation
+
+
+#RM-TOOLS
+rmsynth3d q-image-cube.fits u-image-cube.fits frequencies.dat -i i-image-cube.fits -l 400
+rmclean3d FDF_im_dirty.fits RMSF_FWHM.fits

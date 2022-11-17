@@ -189,7 +189,7 @@ def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
 
     # get the polarisation angle at the peak fday spectrum (intrinsic fpol?)
     # of that component. Note that this is from the cleaned FDF
-    pol_angle = 0.5 *np.arctan2(peak_complex_rm.imag, peak_complex_rm.real)
+    pol_angle = 0.5 * np.arctan2(peak_complex_rm.imag, peak_complex_rm.real)
 
     # Trying to get the frac pol at max polarised intensity for this x,y pixel
     # nfp = np.abs(fp_data[:, x, y])
