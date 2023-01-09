@@ -120,8 +120,8 @@ class PaperPlots:
 
     @staticmethod
     def figure_3_total_and_jets(i_image, mask, jet_mask, start=0.004, vmin=0,
-            vmax=2, scale="linear", cmap="magma",
-            output=f"{PFIGS}/3-total-intensity", kwargs={}):
+            vmax=None, scale="linear", cmap="magma",
+            output=f"{PFIGS}/3-total-intensity", **kwargs):
         
         plt.close("all")
         """
@@ -137,9 +137,10 @@ class PaperPlots:
         }
         wcs = rfu.read_image_cube(i_image)["wcs"]
         i_data = rfu.get_masked_data(i_image, mask)
-        mask = i_data.mask
 
         i_data = np.ma.masked_where(i_data<start, i_data)
+        mask = i_data.mask
+
 
         jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
 
@@ -157,6 +158,12 @@ class PaperPlots:
         jxr = np.min(jx)-wiggle, np.max(jx)+wiggle
         jyr = np.min(jy)-wiggle, np.max(jy)+wiggle
 
+        if vmax is None:
+            vmax = np.percentile(i_data.compressed(), 70)
+
+        if vmin<start or vmin is None:
+            vmin = start
+
         use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)
 
 
@@ -172,6 +179,7 @@ class PaperPlots:
         ax.set_ylim(*yr)
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
+        # ax.set_facecolor("white")
         fig.canvas.draw()
         fig.tight_layout()
         print("Saving total intensity image at:   "+ output)
@@ -221,7 +229,7 @@ class PaperPlots:
     @staticmethod
     def figure_3b_chandra(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
         start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
-        output=f"{PFIGS}/chandra-3-total-intensity", kwargs={}):
+        output=f"{PFIGS}/chandra-3-total-intensity", **kwargs):
         """
         i_image:
             The data without masking. Will be zoomed in anyway
@@ -254,6 +262,7 @@ class PaperPlots:
         wiggle = 20
         y, x = np.where(mask == False)
         jy, jx = np.where(jet_mask == False)
+        
         
         
         xr = np.min(x)-wiggle, np.max(x)+wiggle
@@ -308,6 +317,114 @@ class PaperPlots:
         fig.tight_layout()
         print("Saving jet image at:               "+ output)
         fig.savefig(output+"-jet.png", dpi=DPI)
+        return
+    
+
+    def figure_3c_chandra_MF(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
+        start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
+        output=f"denii", **kwargs):
+        """
+        i_image:
+            The data without masking. Will be zoomed in anyway
+        mask:
+            The masked used from cleaning
+        jet_mask:
+            Mask for this jet
+        
+        """
+
+        plt.close("all")
+        plt.style.use("default")
+        scaling = {
+            "linear": colors.Normalize,
+            "log": colors.LogNorm,
+            "symmetric": colors.SymLogNorm,
+            "centered": colors.CenteredNorm,
+            "power": colors.PowerNorm
+        }
+        wcs = rfu.read_image_cube(i_image)["wcs"]
+        i_data = rfu.get_masked_data(i_image, mask)
+        chandra_data = rfu.get_masked_data(chandra, mask)
+        mask = i_data.mask
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
+
+
+        jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
+
+        levels = contour_levels(start, chandra_data)
+
+        wiggle = 20
+        y, x = np.where(mask == False)
+        jy, jx = np.where(jet_mask == False)
+
+        ########### RM stuff #################################################3
+        # mixin
+        angle_map = kwargs.pop("angle_map")
+        angle_data = np.ma.masked_array(
+            rfu.read_image_cube(angle_map)["data"],
+            mask=mask)
+
+        angle_data = np.rad2deg(angle_data) + ANGLE_OFFSET + ROT
+        angle_data = np.ma.masked_where(i_data<start, angle_data)
+        
+        skip = 7
+        slicex = slice(None, i_data.shape[0], skip)
+        slicey = slice(None, i_data.shape[-1], skip)
+        col, row = np.mgrid[slicex, slicey]
+
+        # get M vector by rotating E vector by 90
+        angle_data = angle_data[slicex, slicey]
+
+        # nornalize this, lenght of the vector
+        scales = 0.03
+    
+        # scale as amplitude
+        # u = scales * np.cos(angle_data)
+        # v = scales * np.sin(angle_data)
+        u = v = np.ones_like(angle_data) * scales
+        
+
+        
+        ########### END ################################################
+
+
+        xr = np.min(x)-wiggle, np.max(x)+wiggle
+        yr = np.min(y)-wiggle, np.max(y)+wiggle
+
+        # jet limits
+        jxr = np.min(jx)-wiggle, np.max(jx)+wiggle
+        jyr = np.min(jy)-wiggle, np.max(jy)+wiggle
+
+        use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)       
+
+        ######################################################################
+        # Plotting the Total intesity with contours
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.set_facecolor("black")
+
+        qv = ax.quiver(
+            row, col, u, v, angles=angle_data, pivot='tail', headlength=0,
+            width=0.0017, scale=5, headwidth=1, color="black")
+    
+        # ax.contour(chandra_data, colors="g", linewidths=1, origin="lower", levels=levels)
+        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
+            linewidths=1, origin="lower", levels=levels)
+
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
+        ax.set_xlim(*xr)
+        ax.set_ylim(*yr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving total intensity image at:   "+ output+"-cont")
+        fig.savefig(output+"-cont.png", dpi=DPI)
+
         return
 
     
@@ -515,6 +632,7 @@ class PaperPlots:
     def figure_8_dop_magnetic_fields_contours(i_image, fp_image, angle_image, mask,
         start=0.004, smooth_sigma=1, output=f"{PFIGS}/8-dop-contours-mfs.png"):
         """
+        LINES SHOW DEGREE OF POLARIZATION HERE!
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
         """
@@ -618,6 +736,8 @@ class PaperPlots:
     def figure_8b_dop_magnetic_fields_contours(i_image, fpol_image, angle_image, mask,
         start=0.004, smooth_sigma=1, output=f"{PFIGS}/8b-dop-contours-mfs.png"):
         """
+        COLOUR MAP SHOWS FRACTIONA POLZN HERE!!
+
         linear poln, intensity contours, rm values vectors
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
@@ -675,11 +795,12 @@ class PaperPlots:
             snd.gaussian_filter(i_data, sigma=smooth_sigma),
             colors="k", linewidths=0.5, origin="lower", levels=levels)
        
-        # linear polarisation image
+        # Fractional polarisation image
         cs = ax.imshow(fpol_data,
-            cmap="coolwarm", origin="lower", vmin=0.1, vmax=0.7
+            cmap="coolwarm", origin="lower", vmin=0, vmax=0.7
             # norm=colors.LogNorm(vmin=fpol_data.min(), vmax=fpol_data.max())
             )
+        
 
         plt.colorbar(cs, label="Fractional polarisation", pad=0)
 
@@ -722,7 +843,7 @@ class PaperPlots:
 
     @staticmethod
     def figure_9a_fractional_poln(i_image, fp_image, mask, start=0.004,
-        smooth_sigma=1, output=f"{PFIGS}/9a-dop-mfs.png"):
+        smooth_sigma=1, output=f"{PFIGS}/9a-dop-mfs.png", vmax=1):
         """
         # Degree of polzn lines without the contours
         This is determined from the FPOL map. 
@@ -778,14 +899,14 @@ class PaperPlots:
         # if I use the mask here, we get a problematic image, creating new mask
         # where image is lower than `start` value
         levels = contour_levels(0.01, fp_data)
-        cs = ax.contourf(
-            fp_data,
-            cmap="coolwarm", origin="lower", levels=levels,#vmin=0, vmax=1
-            )
-        # cs = ax.imshow(fp_data,
-        #     origin="lower", cmap="coolwarm", aspect="equal", vmin=0, vmax=1,
-        #     # norm=colors.LogNorm(vmin=fp_data.min(), vmax=1)
+        # cs = ax.contourf(
+        #     fp_data,
+        #     cmap="coolwarm", origin="lower", levels=levels,#vmin=0, vmax=1
         #     )
+        cs = ax.imshow(fp_data,
+            origin="lower", cmap="coolwarm", aspect="equal", vmin=0, vmax=vmax,
+            # norm=colors.LogNorm(vmin=fp_data.min(), vmax=1)
+            )
         plt.colorbar(cs, label="Fractional Polarisation",
             pad=0)
 
@@ -1221,23 +1342,37 @@ def fixer():
             os.makedirs(os.path.join(PFIGS, o_dir))
 
 
-    # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
-    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
-    # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
+    # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
+    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
+    
     # PaperPlots.figure_rm_map(imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
     # PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
 
-    tloops = [
-        # "rm-tools-test/cirada-rm-no-f/heres-polAngle0Fit_deg.fits",
-        # "rm-tools-test/pipe-3d-out/q-image-cube_polAngle0Fit_deg.fits",
-        # "rm-tools-test/lim-4k.fits",
-        pangle_map,
-    ]
-    for _t, tloop in enumerate(tloops):
-        PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, 
-            tloop,
-            mask, output=f"rmap_with_vecs-ROT-{ROT}-{_t}")
+    # tloops = [
+    #     # "rm-tools-test/cirada-rm-no-f/heres-polAngle0Fit_deg.fits",
+    #     # "rm-tools-test/pipe-3d-out/q-image-cube_polAngle0Fit_deg.fits",
+    #     # "rm-tools-test/lim-4k.fits",
+    #     pangle_map,
+    # ]
+    # for _t, tloop in enumerate(tloops):
+    #     PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, 
+    #         tloop,
+    #         mask, output=f"rmap_with_vecs-ROT-{ROT}-{_t}")
+
+
+    # For presentation
+    # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask, output="defauts", vmax=0.7)
+    # PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
+    #     output=f"defauts", 
+    #     vmin=0, vmax=None, scale="linear", cmap="gray_r")
+    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
     
+    PaperPlots.figure_3c_chandra_MF(imgs[0], mask, chandra=chandra[0],
+        chandra_jet=chandra[1], jet_mask=jet_mask,
+        output="DENNIII", 
+        vmin=0, vmax=1e-1, scale="linear", cmap="magma", angle_map=pangle_map)
+
+
 
 
 def run_paper_mill():

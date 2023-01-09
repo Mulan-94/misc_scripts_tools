@@ -41,7 +41,7 @@ FPOL_FILTER = []
 MFT = 0.7
 
 def configure_logger(out_dir):
-# ignore overflow errors, assume these to be mostly flagged data
+    # ignore overflow errors, assume these to be mostly flagged data
     warnings.simplefilter("ignore")
 
     formatter = logging.Formatter(

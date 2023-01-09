@@ -1,0 +1,18 @@
+export orig_cubes="intermediates/original-cubes";
+export sel_cubes="intermediates/selection-cubes";
+export conv_cubes="intermediates/conv-selection-cubes";
+export plots="intermediates/beam-plots";
+export prods="products";
+export spis="products/spi-fitting";
+export imgs="relevant-images";
+
+export regsize=3;
+export scout="scrap-outputs-s$regsize";
+
+export mask_dir=$HOME/pica/reduction/experiments/emancipation/masks;
+
+# for scrappy
+# I change region size from 5pix to 3 pixels.
+# Set minimum noise*threshold above which to generate regions
+export regsize=3;
+export scout="scrap-outputs-s$regsize";
