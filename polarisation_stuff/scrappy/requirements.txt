@@ -1,0 +1,6 @@
+astropy
+numpy
+regions
+matplotlib
+# when needed
+# casatasks

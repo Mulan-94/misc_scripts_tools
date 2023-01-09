@@ -1,0 +1,52 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "test-regions",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scrappy.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-od",
+                "testing-regs",
+                "-ref-image",
+                "imgs/i-mfs.fits",
+                "--threshold",
+                "7",
+                "-rs",
+                "5",
+                "-todo",
+                "r",
+                "-idir",
+                "imgs"
+            ]
+        },
+        {
+            "name": "test-los",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scrappy.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-od",
+                "testing-los",
+                "-ref-image",
+                "imgs/i-mfs.fits",
+                "--threshold",
+                "7",
+                "-rs",
+                "10",
+                "-todo",
+                "rl",
+                "-idir",
+                "imgs"
+            ]
+        }
+    ]
+}
