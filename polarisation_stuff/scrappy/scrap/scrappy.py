@@ -8,21 +8,30 @@ from functools import partial
 from itertools import product
 from multiprocessing import Array
 
-from scraplog import snitch
-from arguments import parser
-from image_utils import (read_fits_image, region_flux_jybm, region_is_above_thresh,
-    read_regions_as_pixels, make_default_regions, make_noise_region_file, parse_valid_region_candidates, write_regions, image_noise, get_wcs, are_all_zeroes, are_all_nan)
-from rm_math import (polarised_snr, linear_polzn_error, frac_polzn,
-    frac_polzn_error, linear_polzn, polzn_angle, polzn_angle_error)
-from math_utils import is_infinite, are_all_nan, nancount
-from plotting import overlay_regions_on_source_plot
-from utils import fullpath, make_out_dir
+PATH = set(sys.path)
+PROJECT_ROOT = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir))
+if not PATH.issuperset(PROJECT_ROOT):
+    sys.path.append(PROJECT_ROOT)
 
+
+from utils.genutils import fullpath, make_out_dir
+from utils.mathutils import is_infinite, are_all_nan, nancount, are_all_zeroes
+from utils.rmmath import (polarised_snr, linear_polzn_error, frac_polzn,
+    frac_polzn_error, linear_polzn, polzn_angle, polzn_angle_error,lambda_sq)
+
+
+from scrap.scraplog import snitch
+from scrap.arguments import parser
+from scrap.image_utils import (read_fits_image, region_flux_jybm, region_is_above_thresh,
+    read_regions_as_pixels, make_default_regions, make_noise_region_file,
+    parse_valid_region_candidates, write_regions, image_noise, get_wcs)
+from scrap.plotting import overlay_regions_on_source_plot
 
 
 def initialise_globals(odir="scrappy-out"):
     global ODIR, RDIR, PLOT_DIR, LOS_DIR, RFILE, CURRENT_RFILE, NRFILE
-    global OVERWRITE, MFT, REG_SIZE
+    global OVERWRITE, MFT, REG_SIZE, NWORKERS
 
     ODIR = fullpath(os.curdir, odir)
 
@@ -37,6 +46,7 @@ def initialise_globals(odir="scrappy-out"):
     OVERWRITE = True
     MFT = 0.7
     REG_SIZE = 30
+    NWORKERS = 16
     return
 
 
@@ -70,12 +80,12 @@ def make_syncd_data_stores(size, syncd=True):
         "chan_width": dtype,
         "fpol": dtype,
         "fpol_err": dtype,
-        "lpol": dtype,
         "lpol_err": dtype,
         "pangle": dtype,
         "pangle_err": dtype,
         "snr": dtype,
         "freqs": dtype,
+        "lambda_sq": dtype
         # storing a boolean as unsigned char
         # https://docs.python.org/3/library/array.html#module-array
         }
@@ -87,14 +97,12 @@ def make_syncd_data_stores(size, syncd=True):
         outs.update({key: Array(dt, np.ones(size, dtype=dt)*np.nan)
                 for key, dt in general.items()})
         outs["mask"] = Array('B', np.zeros(size, dtype=bool))
-
     else:
         outs = {key: np.ones(size, dtype=dt)*np.nan
                 for key, dt in per_image.items()}
         outs.update({key: np.ones(size, dtype=dt)*np.nan
                 for key, dt in general.items()})
         outs["mask"] = np.zeros(size, dtype=bool)
-
     return outs
 
 
@@ -214,13 +222,14 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
         sds["fpol"][cidx] = fpol
         sds["fpol_err"][cidx] = frac_polzn_error(signal_i, signal_q, signal_u,
                                         i_noise, q_noise, u_noise)
-        sds["lpol"][cidx] = linear_polzn(signal_q, signal_u)
+
         sds["lpol_err"][cidx] = noise
         sds["pangle"][cidx] = polzn_angle(signal_q, signal_u)
         sds["pangle_err"][cidx] = polzn_angle_error(signal_q, signal_u, q_noise, u_noise)
         sds["snr"][cidx] = snr
         sds["chan_width"][cidx] = i_data.header["CDELT3"]
         sds["freqs"][cidx] = i_data.freq
+        sds["lambda_sq"][cidx] = lambda_sq(i_data.freq, i_data.header["CDELT3"])
 
         # check 3: is fpol above zero?
         # create a mask for when fpol less than 0 or less than1
@@ -228,8 +237,9 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
         return True
 
     else:
-        snitch.info(f"SNR {snr} < {threshold}")
-        snitch.info(f"Skipping channel: {channel}")
+        snitch.info(
+            f"Skipping channel: {channel} in LoS: {reg.meta['text']}. " +
+            f"SNR {snr:.2f} < {threshold}")
         # mask this data 
         sds["mask"][cidx] = True
         return False   
@@ -245,8 +255,7 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
     noise_file: str
         File containning the noise region
     """
-    # waves = lambda_sq(i_data.freqs, i_data.chan_width)
-    
+
     #using one of the input images for wcs 
     wcs = get_wcs(wcs_ref)
 
@@ -259,14 +268,12 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
     for ridx, reg in enumerate(regs):
 
         # create some data store that'll store region data
-
         global sds
-
 
         sds = make_syncd_data_stores(len(images), syncd=True)       
         snitch.info(f"Region: {reg.meta['text']}")
 
-        with futures.ProcessPoolExecutor(max_workers=16) as executor:
+        with futures.ProcessPoolExecutor(max_workers=NWORKERS) as executor:
             results = list(executor.map(
                     partial(
                         parse_valid_fpol_region_per_region,
@@ -295,6 +302,9 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
         n_masked = np.array(sds["mask"]).sum()
         n_chans = len(images)
         if n_masked != n_chans and n_masked <= n_chans*MFT:
+            # adding lpol here because complex arrays dont work with multiproc array
+            sds["lpol"] = linear_polzn(np.array(sds["Q"]), np.array(sds["U"]))
+            
             snitch.warning(f"{reg.meta['text']}: flagged {n_masked}/{n_chans} points")
         
             outfile = fullpath(LOS_DIR, f"reg_{count}")
@@ -308,7 +318,7 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
         else:
             snitch.warning(f"Skipping region {reg.meta['text']} because either:")
             snitch.warning("(1) Too much data was flagged, or not " +
-                f"enough data: >{MFT*100}%, flagged: {(n_masked/n_chans)*100}%")
+                f"enough data: >{MFT*100}%, flagged: {(n_masked/n_chans)*100:.2f}%")
             snitch.warning(f"(2) All data is flagged; there's no valid "+
                             "data in this region.")
 
@@ -447,6 +457,9 @@ def main():
     else:
         threshold = opts.threshold
 
+    if opts.nworkers is not None:
+        NWORKERS = opts.nworkers
+
     # For regions
     if opts.regions_only or "r" in todo:
 
@@ -481,13 +494,16 @@ if __name__ == "__main__":
     snitch.info("Bye :D !")
 
     """
-    python scrappy.py -id imgs -od testing -ref-image imgs/i-mfs.fits --threshold 3
+    python scrappy.py -id imgs -od testing -ref-image
+        imgs/i-mfs.fits --threshold 3
 
     # test regions
-    python scrappy.py -od testing-regs -ref-image imgs/i-mfs.fits --threshold 3 -rs 40 -todo r -idir imgs
+    python scrappy.py -od testing-regs -ref-image
+        imgs/i-mfs.fits --threshold 3 -rs 40 -todo r -idir imgs
 
     # test LOS
-    python scrappy.py -od testing-LOS -ref-image imgs/i-mfs.fits --threshold 3 -rs 40 -todo rl -idir imgs
+    python scrappy.py -od testing-LOS -ref-image
+        imgs/i-mfs.fits --threshold 3 -rs 40 -todo rl -idir imgs
 
 
     python qu_pol/scrappy/scrappy.py -rs 3 -idir 

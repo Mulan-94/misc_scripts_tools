@@ -1,15 +1,26 @@
-# python scrap.py -rs 20 -t circle-sel-0.05 -f clean-small.txt --threshold 0.05 -rf regions/selected.reg
-# python rm_synthesis.py -id IQU-regions-mpc-20-circle-sel-0.05 -od test_plot -md 1200
+NEW scripts with new scrap data
+--------------------------------
 
-# python scrap.py -rs 20 -t correct-sel-0.05 -f clean-small.txt --threshold 0.05 -rf regions/beacons-20-chosen.reg 
-# python rm_synthesis.py -id IQU-regions-mpc-20-correct-sel-0.05 -od test_plot -md 1200
+python qu_pol/scrappy/scrap/scrappy.py -rs $regsize -idir $imgs --threshold 10 -odir newscrap -ref-image i-mfs.fits
+
+python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id newscrap-s$regsize/los-data -od toops-new-script -md 400 --depth-step 1
+
+
+NEW scripts with old scrap data
+--------------------------------
+
+python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id oldscrap/iqu-regions-mpc-3-boat -od toops-old-data-newscript -md 400 --depth-step 1
 
 
 
 
-python scrap.py -rs 3 5 -t circles -f clean-small.txt --threshold 0.05 -rt 10 --noverwrite
+OLD scripts with new scrap data
+-------------------------------
 
-python rm_synthesis.py -id IQU-regions-mpc-*-circles -md 1200
+python qu_pol/scrap.py -rs 3 -rf newscrap-s3/regions/regions-valid.reg -t boat -f sel-test.txt --threshold 10 --output-dir oldscrap -wcs-ref i-mfs.fits -mrn 0.0006 -nrfs i-mfs.fits q-mfs.fits u-mfs.fits
+
+python qu_pol/rm_synthesis.py -id oldscrap/iqu-regions-mpc-3-boat -od toops-old-script -md 400 --depth-step 1
+
 
 python plot_bk.py -id IQU-regions-mpc-*-circles --yaml plots.yml 
 
@@ -68,3 +79,27 @@ rmclean3d FDF_im_dirty.fits RMSF_FWHM.fits
 #RM-TOOLS
 rmsynth3d q-image-cube.fits u-image-cube.fits frequencies.dat -i i-image-cube.fits -l 400
 rmclean3d FDF_im_dirty.fits RMSF_FWHM.fits
+
+
+def read_npz(ins, compress=False):
+    with np.load(ins, allow_pickle=True) as vn:
+        data = dict(vn)
+        mask = data.pop("mask")
+        if compress:
+            data = {k: np.ma.masked_array(data=v, mask=mask).compressed()
+                    for k, v in data.items()}
+        # else:
+        #     data = {k: np.ma.masked_array(data=v, mask=mask)
+        #             for k, v in data.items()}
+            
+    return data
+
+old_scrap = read_npz(old)
+new_scrap = read_npz(new)
+
+
+def compare(oldd, newd, key, single=False):
+    res = oldd[key]==newd[key]
+    if single:
+        res = np.all(ress)
+    return res

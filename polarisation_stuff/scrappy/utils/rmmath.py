@@ -44,27 +44,29 @@ def lambda_sq_err(n_chans: int, lambda_sq_0: float, lambda_sq: tuple):
     return err_lambda
 
 def linear_polzn(q, u):
-    """Amplitude of the total polarised intensity"""
+    """complex linear polarised intensity"""
     linear = q + 1j*u
-    return np.abs(linear)
+    return linear
 
 def linear_polzn_error(q, u, q_err, u_err):
     """Appendix A.7
     Error in total linear polarised intensity
     """
-    lpol = linear_polzn(q, u)
+    lpol = np.abs(linear_polzn(q, u))
     err_sq = (q**2 * q_err**2)/ lpol**2 + \
              (u**2 * u_err**2)/lpol**2
     return np.sqrt(err_sq)
 
-def polzn_angle(q, u):
+def polzn_angle(q, u, deg=False):
     """Angle of polarisation"""
     angle = 0.5 * np.arctan2(u,q)
-    return np.rad2deg(angle)
+    if deg:
+        angle = np.rad2deg(angle)
+    return angle
 
 def polzn_angle_error(q, u, q_err, u_err):
     """Equation 54 and 55"""
-    lpol = linear_polzn(q, u)
+    lpol = np.abs(linear_polzn(q, u))
     err_sq = ((u**2 * q_err**2) + (q**2 * u_err**2)) \
             / (4 * lpol**4)
     return np.sqrt(err_sq)
@@ -76,13 +78,13 @@ def rm_error(pangle_err: float, lam_sq_err: float, n_chans: int):
     return err_rm
 
 def frac_polzn(i, q, u):
-    # this gets the amplitude of linear polarisation
-    frac_pol = linear_polzn(q, u) / i
+    # linear fractional polarisation
+    frac_pol = np.abs(linear_polzn(q, u)) / i
     return frac_pol
 
 def frac_polzn_error(i, q, u, i_err, q_err, u_err):
     fpol = frac_polzn(i, q, u)
-    p = linear_polzn(q, u)
+    p = np.abs(linear_polzn(q, u))
     p_err = linear_polzn_error(q, u, q_err, u_err)
     res = np.abs(fpol) * np.sqrt(np.square((p_err/p)) + np.square((i_err/i)))
     return res
@@ -101,7 +103,7 @@ def polarised_snr(q: float, u: float, q_err: float, u_err: float):
     1. Total polarised intensity
     2. Standard error of (1)
     """
-    lpol = linear_polzn(q, u)
+    lpol = np.abs(linear_polzn(q, u))
     lpol_err = linear_polzn_error(q, u, q_err, u_err)
     return lpol/lpol_err
 

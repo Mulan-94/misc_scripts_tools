@@ -1,0 +1,98 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "old-rmsynthesis",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/../rm_synthesis.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-id",
+                // "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/products/scrap-outputs-s3/los-data",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/oldscrap/iqu-regions-mpc-3-boat",
+                "-od",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/toops-rm-plots",
+                "-md",
+                "400",
+                "--depth-step",
+                "1"
+            ]
+        },
+        {
+            "name": "new-rmsynthesis",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/rmsynthesis/rm_synthesis.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-id",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/products/scrap-outputs-s3/los-data",
+                "-od",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/toops-rm-plots",
+                "-md",
+                "400",
+                "--depth-step",
+                "1"
+            ]
+        },
+        {
+            "name": "new-scrappy-test-los",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/scrappy/scrap/scrappy.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-od",
+                "testing-los",
+                "-ref-image",
+                "imgs/i-mfs.fits",
+                "--threshold",
+                "7",
+                "-rs",
+                "10",
+                "-todo",
+                "rl",
+                "-idir",
+                "imgs"
+            ]
+        },
+        {
+            "name": "old-scrappy-test-los",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/../scrap.py",
+            "console": "integratedTerminal",
+            "justMyCode": true,
+            "args": [
+                "-rs",
+                "3",
+                "-rf",
+                // "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/products/scrap-outputs-sharps/regions/sharp-rm.reg",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/products/scrap-outputs-s3/regions/regions-valid.reg",
+                "-t",
+                "boat",
+                "-f",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/sel-test.txt",
+                "--threshold",
+                "10",
+                "--output-dir",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/oldscrap",
+                "-wcs-ref",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/i-mfs.fits",
+                "-mrn",
+                "0.0006",
+                "-nrfs",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/i-mfs.fits",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/q-mfs.fits",
+                "/home/andati/pica/reduction/experiments/emancipation/6-00-polarimetry/u-mfs.fits"
+            ]
+        }
+    ]
+}

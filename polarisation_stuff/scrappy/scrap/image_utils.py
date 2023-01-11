@@ -11,11 +11,11 @@ from itertools import product
 from regions import Regions, PixCoord, CirclePixelRegion, RectanglePixelRegion
 
 
-from scraplog import snitch
-from math_utils import (are_all_nan, are_all_zeroes, is_infinite, rms,
+from scrap.scraplog import snitch
+from utils.mathutils import (are_all_nan, are_all_zeroes, is_infinite, rms,
     signal_to_noise, snr_is_above_threshold, are_all_masked)
 
-from rm_math import (lambda_sq, frac_polzn, linear_polzn, linear_polzn_error,
+from utils.rmmath import (lambda_sq, frac_polzn, linear_polzn, linear_polzn_error,
     polarised_snr, frac_polzn_error, polzn_angle, polzn_angle_error)
 
 

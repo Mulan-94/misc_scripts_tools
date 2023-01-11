@@ -4,10 +4,10 @@ import numpy as np
 
 from matplotlib import colors
 
-from image_utils import (get_wcs, read_regions_as_pixels,
+from utils.rmmath import lambda_sq, freq_sqrt
+from scrap.image_utils import (get_wcs, read_regions_as_pixels,
     image_noise, read_fits_image)
-from rm_math import lambda_sq, freq_sqrt
-from scraplog import snitch
+from scrap.scraplog import snitch
 
 plt.style.use("bmh")
 

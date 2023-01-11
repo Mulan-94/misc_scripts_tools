@@ -70,12 +70,16 @@ def parser():
         """)
     genopts.add_argument("--noverwrite", dest="noverwrite", action="store_false",
         help="Do not ovewrite everything along the way. Default is overwrite")
-    genopts.add_argument("-o", "-od", "--output-dir", dest="odir", type=str,
+    genopts.add_argument("-o", "-odir", "--output-dir", dest="odir", type=str,
         default=None, metavar="",
         help="where to dump output")    
     genopts.add_argument("--threshold", dest="threshold", metavar="", type=int,
         default=None,
         help="""If SNR below which data will not be considered. Default is 3""")
+    genopts.add_argument("-j", "--nworkers", dest="nworkers", metavar="",
+        type=int, default=None,
+        help="How many workers to use for prcessing"
+    )
 
     
 

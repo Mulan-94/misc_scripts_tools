@@ -80,7 +80,7 @@ class IOUtils:
     def make_out_dir(dir_name):
         if not os.path.isdir(dir_name):
             os.makedirs(dir_name)
-        return os.path.relpath(dir_name)
+        return os.path.abspath(dir_name)
 
 
     @staticmethod
@@ -800,6 +800,7 @@ class FitsManip:
             # data["bmaj"] = hdul[0].header["BMAJ"]
             # data["bmin"] = hdul[0].header["BMIN"]
             data["freqs"] = hdul[0].header["CRVAL3"]
+            data["chan_width"] = hdul[0].header["CDELT3"]
             data["fnames"] = fname
             data["data"] = hdul[0].data.squeeze()
         return data
@@ -943,7 +944,7 @@ class FitsManip:
             #         )
 
             
-            outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": [], "image_noise": []}
+            outs = {_: {"flux_jybm": [], "freqs": [],"fnames": [], "noise": [], "image_noise": [], "chan_width": []}
                         for _ in "IQU"}
             
             for res in results:
@@ -951,6 +952,7 @@ class FitsManip:
                     continue
                 outs[res["stokes"]]["flux_jybm"].append(res["flux_jybm"])
                 outs[res["stokes"]]["freqs"].append(res["freqs"])
+                outs[res["stokes"]]["chan_width"].append(res["chan_width"])
                 outs[res["stokes"]]["fnames"].append(res["fnames"])
                 # global noise i.e from respective stoke Mfs image
                 outs[res["stokes"]]["noise"].append(res["noise"])
@@ -963,6 +965,7 @@ class FitsManip:
                 # contains I, Q, U, noise, freqs, fpol, lpol
                 fout = {k: np.asarray(v["flux_jybm"], dtype=np.float) for k,v in outs.items()}
                 fout["freqs"] = outs["I"]["freqs"]
+                fout["chan_width"] = outs["I"]["chan_width"]
                 fout.update({f"{k}_mfs_noise".lower(): outs[k]["noise"] for k in "IQU"})
                 fout.update({f"{v}_err": outs[v]["image_noise"] for v in "IQU"})
                 
@@ -1266,8 +1269,8 @@ if __name__ == "__main__":
                 snitch.warning(f"Noise for {_k}-mfs :   {_v:8.8f}")
                 snitch.warning(f"Noise threshold {_k}-mfs :   {opts.thresh*_v:8.8f}")  
             snitch.warning("...............................................")
-            IOUtils.overlay_regions_on_source_plot(
-                    reg_file, opts.wcs_ref, opts.mrn or _noise_ref, opts.thresh)
+            # IOUtils.overlay_regions_on_source_plot(
+            #         reg_file, opts.wcs_ref, opts.mrn or _noise_ref, opts.thresh)
             if opts.r_only:
                 snitch.warning("Generated regions only as per request")
                 continue
