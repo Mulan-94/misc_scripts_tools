@@ -302,7 +302,8 @@ def read_regions_as_pixels(reg_file, wcs=None):
     return regs
 
 
-def parse_valid_region_candidates(image, reg_file, noise_file, threshold, noise=None, overwrite=True):
+def parse_valid_region_candidates(image, reg_file, noise_file, threshold, 
+    noise=None, overwrite=True):
     """
     Only store regions which are above the specified threshold
     Algorithm

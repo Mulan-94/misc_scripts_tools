@@ -2,6 +2,8 @@ import os
 import sys
 from time import perf_counter
 
+import numpy as np
+
 from utils.logger import LOG_FORMATTER, setup_streamhandler, logging
 
 snitch = logging.getLogger(__name__)
@@ -49,6 +51,22 @@ def make_importable():
     if not PATH.issuperset(PROJECT_ROOT):
         sys.path.append(PROJECT_ROOT)
 
+
+def does_specified_file_exist(*args):
+    not_found = []
+    for fname in args:
+        if fname is None:
+            continue
+        if not os.path.isfile(fname):
+            not_found.append(fname)
+
+    if len(not_found):
+        snitch.error("The following files are required but were not found:")
+        for fname in not_found:
+            snitch.error(f"-> {fname}")
+        snitch.error("Please ensure that they exist if intended for use")
+        sys.exit()
+    
 
 
 # from https://stackoverflow.com/questions/2352181/how-to-use-a-dot-to-access-members-of-dictionary

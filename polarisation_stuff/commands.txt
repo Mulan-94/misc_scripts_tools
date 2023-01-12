@@ -103,3 +103,13 @@ def compare(oldd, newd, key, single=False):
     if single:
         res = np.all(ress)
     return res
+
+
+# From QU Lerato's script
+python qu_pol/scrappy/rmsynthesis/fit-qu-cube-random-x2.py \
+    -q $conv_cubes/q-conv-image-cube.fits \
+    -u $conv_cubes/u-conv-image-cube.fits \
+    -i $conv_cubes/i-conv-image-cube.fits \
+    -rm $prods/initial-RM-depth-at-peak-rm.fits \
+    -fp $prods/initial-FPOL-at-max-lpol.fits \
+    -ldf $scout-s3/los-data/reg_1.npz

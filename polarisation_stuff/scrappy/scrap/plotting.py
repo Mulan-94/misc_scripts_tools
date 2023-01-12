@@ -280,7 +280,7 @@ def overlay_regions_on_source_plot(reg_file, ref_image, noise_rfile, threshold=1
     
     plt.close("all")
     fig, ax = plt.subplots(
-            figsize=(6, 10), ncols=1, nrows=3, sharex=True, sharey=True,
+            figsize=(10, 10), ncols=1, nrows=3, sharex=True, sharey=True,
             gridspec_kw={"wspace":0, "hspace":0})
 
     ax = ax.flatten()

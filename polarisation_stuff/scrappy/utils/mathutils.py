@@ -35,7 +35,7 @@ def is_infinite(data):
 
 
 def signal_to_noise(signal, rms_noise):
-    return signal/rms_noise
+    return np.abs(signal/rms_noise)
 
 
 def snr_is_above_threshold(snr, thresh):

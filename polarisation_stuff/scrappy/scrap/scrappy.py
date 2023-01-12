@@ -16,7 +16,7 @@ if not PATH.issuperset(PROJECT_ROOT):
 
 
 from utils.genutils import fullpath, make_out_dir
-from utils.mathutils import is_infinite, are_all_nan, nancount, are_all_zeroes
+from utils.mathutils import is_infinite, are_all_nan, nancount, are_all_zeroes, signal_to_noise
 from utils.rmmath import (polarised_snr, linear_polzn_error, frac_polzn,
     frac_polzn_error, linear_polzn, polzn_angle, polzn_angle_error,lambda_sq)
 
@@ -28,6 +28,9 @@ from scrap.image_utils import (read_fits_image, region_flux_jybm, region_is_abov
     parse_valid_region_candidates, write_regions, image_noise, get_wcs)
 from scrap.plotting import overlay_regions_on_source_plot
 
+
+
+            
 
 def initialise_globals(odir="scrappy-out"):
     global ODIR, RDIR, PLOT_DIR, LOS_DIR, RFILE, CURRENT_RFILE, NRFILE
@@ -85,7 +88,8 @@ def make_syncd_data_stores(size, syncd=True):
         "pangle_err": dtype,
         "snr": dtype,
         "freqs": dtype,
-        "lambda_sq": dtype
+        "lambda_sq": dtype,
+        "noise": dtype,
         # storing a boolean as unsigned char
         # https://docs.python.org/3/library/array.html#module-array
         }
@@ -106,70 +110,11 @@ def make_syncd_data_stores(size, syncd=True):
     return outs
 
 
-# def parse_valid_fpol_region_per_chan(i_data, q_data, u_data, regs, noise_reg, threshold):
-#     """
-#     Only store regions which are above the specified threshold
-#     Algorithm
-#     1. Calculate poln power
-#     2. Calulate error in 1
-#     3. Check if snr > threhsold
-#     4. If snr > threshold
-#         - calculate fpol
-#         - Only store if fpol is btwn 0 and 1
-#     5. Store the
-#         - flux_jynm
-#         - image noise
-#         - freq
-#         - lambda squared
-#         - i, q and u errors
-#         - fpol errors
-#         - 
-#     """
-#     noise_reg = read_regions_as_pixels(noise_file)
-    
-#     i_noise = image_noise(noise_reg, i_data)
-#     q_noise = image_noise(noise_reg, q_data)
-#     u_noise = image_noise(noise_reg, u_data)
 
-
-#     valids = []
-#     for _i, reg in enumerate(regs):
-#         signal_i = region_flux_jybm(reg, i_data)
-#         signal_q = region_flux_jybm(reg, q_data)
-#         signal_u = region_flux_jybm(reg, u_data)
-
-#         snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
-#         noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
-
-#         if is_infinite(noise):
-#             snitch.info(f"Skipping region: {reg.meta['text']}. Image is not sensible")
-#             continue
-
-#         if region_is_above_thresh(snr=snr, noise=noise, threshold=threshold):
-#             # fpol = frac_polzn(signal_i, signal_q, signal_u)
-            
-#             # if fpol>1 or fpol<=0:
-#             #     snitch.info(f"Skipping region: {reg.meta['text']}. "+\
-#             #             "Fractional polarisation is above limit")
-#             #     continue
-
-#             # # store signal and noise info
-#             info.append(dict(flux_jybm=signal, noise=noise))
-#             valids.append(
-#                 "circle({:.6f}, {:.6f}, {:.6f}\") # text={{reg_{}}}".format(
-#                 reg.center.ra.deg, reg.center.dec.deg, reg.radius.arcsec, _i))
-
-#     if len(valids) > 0:
-#         snitch.info(f"Found {len(valids)}/{len(regs)} valid region candidates")
-#         valid_candidates_file = RFILE + "-valid-candidates.reg"
-#         valid_candidates_file = write_regions(valid_candidates_file, valids)
-#     else:
-#         snitch.warning("No valid regions were found")
-
-#     return valid_candidates_file
     
 
-def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold):
+def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold,
+    global_noise):
     """
     triplets: tuple
         A tuple with (i,q,u) image name
@@ -177,6 +122,7 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
         Index number of the channel          
     """    
     global sds
+    
     # function starts here; loop over the channelised images
     i_im, q_im, u_im = triplets
     i_data = read_fits_image(i_im)
@@ -186,6 +132,13 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
     i_noise = image_noise(noise_reg, i_data.data)
     q_noise = image_noise(noise_reg, q_data.data)
     u_noise = image_noise(noise_reg, u_data.data)
+
+    # Add some of the free standing data for completeness
+    # these should never have nan values
+    sds["chan_width"][cidx] = i_data.header["CDELT3"]
+    sds["freqs"][cidx] = i_data.freq
+    sds["lambda_sq"][cidx] = lambda_sq(i_data.freq, i_data.header["CDELT3"])
+    sds["noise"][cidx] = global_noise
 
     # check 1: Is the image valid ?
     # remember initial values are set in sds intializer
@@ -201,12 +154,15 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
     signal_q = region_flux_jybm(reg, q_data.data)
     signal_u = region_flux_jybm(reg, u_data.data)
 
-    snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
-    noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
+    # snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
+    # noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
+
+    # get snr of total intensity to global total intensity noise
+    snr = signal_to_noise(signal_i, global_noise)
 
  
     # Check 2: Is the region above the threshold ?
-    if region_is_above_thresh(snr=snr, noise=noise, threshold=threshold):
+    if region_is_above_thresh(snr=snr, threshold=threshold):
         # store signal and noise info
         sds["I"][cidx] = signal_i 
         sds["I_err"][cidx] = i_noise 
@@ -223,13 +179,14 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
         sds["fpol_err"][cidx] = frac_polzn_error(signal_i, signal_q, signal_u,
                                         i_noise, q_noise, u_noise)
 
-        sds["lpol_err"][cidx] = noise
+        sds["lpol_err"][cidx] = linear_polzn_error(signal_q, signal_u, q_noise,
+            u_noise)
         sds["pangle"][cidx] = polzn_angle(signal_q, signal_u)
         sds["pangle_err"][cidx] = polzn_angle_error(signal_q, signal_u, q_noise, u_noise)
         sds["snr"][cidx] = snr
-        sds["chan_width"][cidx] = i_data.header["CDELT3"]
-        sds["freqs"][cidx] = i_data.freq
-        sds["lambda_sq"][cidx] = lambda_sq(i_data.freq, i_data.header["CDELT3"])
+        # sds["chan_width"][cidx] = i_data.header["CDELT3"]
+        # sds["freqs"][cidx] = i_data.freq
+        # sds["lambda_sq"][cidx] = lambda_sq(i_data.freq, i_data.header["CDELT3"])
 
         # check 3: is fpol above zero?
         # create a mask for when fpol less than 0 or less than1
@@ -245,7 +202,7 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold
         return False   
 
 
-def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref):
+def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_ref):
     """
     images: list
         List containing tuples with the channelise I,Q,U images. 
@@ -256,11 +213,14 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
         File containning the noise region
     """
 
-    #using one of the input images for wcs 
-    wcs = get_wcs(wcs_ref)
+    #using the noise reference image to get the wcs and the global reference noise
+    wcs = get_wcs(noise_ref)
 
     regs = read_regions_as_pixels(reg_file, wcs=wcs)
     noise_reg, = read_regions_as_pixels(noise_file, wcs=wcs)
+
+    # get the single reference global noise from the noise reference image
+    global_noise = image_noise(noise_reg, read_fits_image(noise_ref).data)
 
 
     valid_regions = []
@@ -278,7 +238,7 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, wcs_ref
                     partial(
                         parse_valid_fpol_region_per_region,
                            reg=reg, noise_reg=noise_reg,
-                            threshold=threshold),
+                            threshold=threshold, global_noise=global_noise),
                     images, range(len(images))
                   ))
 
@@ -350,12 +310,12 @@ def step1_default_regions(reg_size, wcs_ref, x_range, y_range, threshold=1, rnoi
     return
 
 
-def step2_valid_reg_canidates(wcs_ref, threshold, rnoise=None):
+def step2_valid_reg_canidates(wcs_ref, noise_ref, threshold, rnoise=None):
     # Step 2: Determines which regions meet the requried threshold
     # we use the I-MFS image here. Basiclally just map the source extent
     global CURRENT_RFILE, NRFILE
 
-    CURRENT_RFILE = parse_valid_region_candidates(wcs_ref, CURRENT_RFILE,
+    CURRENT_RFILE = parse_valid_region_candidates(noise_ref, CURRENT_RFILE,
             NRFILE, threshold, noise=rnoise, overwrite=OVERWRITE)
     
     overlay_regions_on_source_plot(
@@ -365,7 +325,7 @@ def step2_valid_reg_canidates(wcs_ref, threshold, rnoise=None):
     return
 
 
-def step3_valid_los_regs(image_dir, threshold, wcs_ref, rnoise=None):
+def step3_valid_los_regs(image_dir, threshold, noise_ref, rnoise=None):
     global CURRENT_RFILE, LOS_DIR, NRFILE
     
     LOS_DIR = make_out_dir(LOS_DIR)
@@ -377,11 +337,10 @@ def step3_valid_los_regs(image_dir, threshold, wcs_ref, rnoise=None):
 
     # Step 3: Generate the regional data files
     CURRENT_RFILE = make_per_region_data_output(images, CURRENT_RFILE, NRFILE,
-                        threshold=threshold, wcs_ref=wcs_ref)
+                        threshold=threshold, noise_ref=noise_ref)
 
-    overlay_regions_on_source_plot(
-        CURRENT_RFILE, wcs_ref,
-        rnoise or NRFILE, threshold)
+    overlay_regions_on_source_plot(CURRENT_RFILE, noise_ref, rnoise or NRFILE,
+        threshold)
 
     return
 
@@ -452,6 +411,11 @@ def main():
     else:
         y_range = opts.y_range
 
+    if opts.noise_ref is None:
+        noise_ref = opts.noise_ref
+    else:
+        noise_ref = "i-mfs.fits"
+
     if opts.threshold is None:
         threshold = 3
     else:
@@ -465,7 +429,7 @@ def main():
 
         step1_default_regions(reg_size, wcs_ref, x_range, y_range,
             threshold=threshold, rnoise=rnoise)
-        step2_valid_reg_canidates(wcs_ref, threshold, rnoise=rnoise)
+        step2_valid_reg_canidates(wcs_ref, noise_ref, threshold, rnoise=rnoise)
     
     # For scrappy
     if opts.los_only or "l" in todo:

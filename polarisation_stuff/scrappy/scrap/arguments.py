@@ -96,8 +96,13 @@ def parser():
         help="""Ther reference image that will be used to generate the default
         region file. Must be the stokes I MFS image. 
         This image will also be used to get the reference WCS for region file
-        genenration. Default is 'i-mfs.fits'
+        genenration. Default is a file named 'i-mfs.fits'
         """)
+    regopts.add_argument("-nri", "--noise-reference-image", dest="noise_ref",
+        metavar="", default=None, required=True,
+        help="""The total intensity image used to get the noise reference.
+        Defaults to a file named 'i-mfs.fits'."""
+        )
     regopts.add_argument("-rf", "--region-file", dest="rfile", type=str,
         default=None, metavar="", 
         help="""An input region file. Otherwise, one will be auto-generated.

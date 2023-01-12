@@ -341,7 +341,7 @@ def write_out_rmsynthesis_data(data, idir, depth, odir=None):
 
     if odir is None:
         odir = os.path.abspath(idir)
-    odir += f"-depths-{depth}"
+    # odir += f"-depths-{depth}"
     odir = make_out_dir(odir)
 
     ofile = fullpath(odir, f"reg_{data.reg_num}")
@@ -396,7 +396,8 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     if "snr" in los:
         snr_idx = np.argmax(los.snr)
         fig.suptitle(
-            f"(||P|| : P$_{{err}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
+            # f"(||P|| : P$_{{err}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
+            f"(I$_{{los}}$ : I$_{{global\_rms}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
             f"@ chan = {los.freqs[snr_idx]/1e9:.2f} GHz " +
             f"and $\lambda^{{2}}$ = {los.lambda_sq[snr_idx]:.2f}")
     fig.tight_layout()
@@ -476,8 +477,9 @@ def main():
         los = read_los_data(data_files[0], compress=False)
         phi_range = np.arange(-opts.max_fdepth, opts.max_fdepth+opts.depth_step,
                             opts.depth_step)
-        rmsf_orig = lambda_to_faraday(los.lambda_sq, phi_range, 1) 
-        plot_rmtf(rmout, results[0])
+        rmsf_orig = lambda_to_faraday(los.lambda_sq, phi_range, 1)
+        rmsf = dicto({"depths": phi_range, "rmtf": rmsf_orig})
+        plot_rmtf(rmsf, results[0])
     return
     
 if __name__ == "__main__":

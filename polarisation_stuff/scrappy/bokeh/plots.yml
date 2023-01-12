@@ -1,0 +1,196 @@
+# Available data products for use
+# 'power', 'fpol', 'lpol', 'angle', 'stokes', 'lambda_sq', 'angle_err'
+# 'power_err', 'fpol_err', 'q_err', 'u_err', 'depths', 'fdirty'
+# 'fclean', 'rmtf'
+# Can be used with the xdata, ydata, x_error, y_error keys
+# If the above keys are not supplied, data will be inferred from the plot name
+
+
+fpol:
+  title: Fractional Pol
+  x_label: Wavelength [m²]
+  y_label: Fractional Polarization
+  x: lambda_sq
+  glyph: Circle
+  items:
+    amplitude:
+      y_error: fpol_err
+      label: amplitude
+      color: AMP_COLOUR
+      visible: true
+    # real:
+    #   # y_error: fpol_err
+    #   label: real
+    #   color: REAL_COLOUR
+    #   visible: false
+    # imaginary:
+    #   # y_error: fpol_err
+    #   label: imaginary
+    #   color: IMAG_COLOUR
+    #   visible: false
+
+
+lpol:
+  title: Linear Pol
+  x_label: Wavelength [m²]
+  y_label: Total polarization
+  x: lambda_sq
+  glyph: Circle
+  items:
+    amplitude:
+      y_error: power_err
+      label: amplitude
+      color: AMP_COLOUR
+      visible: true
+    # real:
+    #   # y_error: power_err
+    #   label: real
+    #   color: REAL_COLOUR
+    #   visible: false
+    # imaginary:
+    #   # y_error: power_err
+    #   label: imaginary
+    #   color: IMAG_COLOUR
+    #   visible: false
+
+angle:
+  title: Pol Angle
+  x_label: Wavelength [m²]
+  y_label: Polarization angle [deg]
+  x: lambda_sq
+  glyph: Circle
+  items:
+    angle:
+      y_error: angle_err
+      label: Polarization angle
+      color: ANGLE_COLOUR
+      visible: true
+
+
+# stokes:
+#   title: Stoke's Q and U
+#   x_label: Wavelength [m²]
+#   y_label: Polarisation angle
+#   x: lambda_sq
+#   glyph: Circle
+#   items:
+#     real:
+#       y_error: q_err
+#       label: Q
+#       color: REAL_COLOUR
+#       visible: true
+#     imaginary:
+#       y_error: u_err
+#       label: U
+#       color: IMAG_COLOUR
+#       visible: true
+
+stokes:
+  title: Stoke's Q and U
+  x_label: Stoke's Q
+  y_label: Stoke's U
+  # x: Q
+  x_error: q_err
+  glyph: Circle
+  items:
+    real:
+      x: imaginary
+      xdata: stokes
+      # x_error: u_err
+      y_error: q_err
+      label: Q
+      color: REAL_COLOUR
+      visible: true
+    imaginary:
+      x: real
+      xdata: stokes
+      # x_error: q_err
+      y_error: u_err
+      label: U
+      color: IMAG_COLOUR
+      visible: true
+
+
+fclean:
+  title: Clean
+  x_label: Faraday Depth [rad m²]
+  y_label: Polarisation Spectra
+  x: depths
+  glyph: Line
+  items:
+    amplitude:
+      # y_error: error
+      label: amplitude
+      color: AMP_COLOUR
+      visible: true
+    # phase:
+    #   # y_error: error
+    #   label: phase
+    #   color: PHASE_COLOUR
+    # visible: false
+    real:
+      # y_error: error
+      label: real
+      color: REAL_COLOUR
+      visible: false
+    imaginary:
+      # y_error: error
+      label: imaginary
+      color: IMAG_COLOUR
+      visible: false
+
+fdirty:
+  title: Dirty
+  x_label: Faraday Depth [rad m²]
+  y_label: Polarisation Spectra
+  x: depths
+  glyph: Line
+  items:
+    amplitude:
+      # y_error: error
+      label: amplitude
+      color: AMP_COLOUR
+      visible: true
+    # phase:
+    #   # y_error: error
+    #   label: phase
+    #   color: PHASE_COLOUR
+    # visible: false
+    real:
+      # y_error: error
+      label: real
+      color: REAL_COLOUR
+      visible: false
+    imaginary:
+      # y_error: error
+      label: imaginary
+      color: IMAG_COLOUR
+      visible: false
+
+rmtf:
+  title: RMTF
+  x_label: Faraday depth
+  y_label: Polarised flux
+  x: depths
+  glyph: Line
+  items:
+    amplitude:
+      # y_error: error
+      label: amplitude
+      color: AMP_COLOUR
+      visible: true
+    # phase:
+    #   # y_error: error
+    #   label: phase
+    #   color: PHASE_COLOUR
+    # visible: false
+    real:
+      # y_error: error
+      label: real
+      color: REAL_COLOUR
+      visible: false
+    imaginary:
+      # y_error: error
+      label: imaginary
+      color: IMAG_COLOUR
+      visible: false
