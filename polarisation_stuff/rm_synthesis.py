@@ -50,7 +50,7 @@ def lambda_to_faraday(lambda_sq, phi_range, lpol):
     N = len(lambda_sq)
 
     # get the initial lambda square value from the mean
-    init_lambda_sq = lambda_sq.mean()
+    init_lambda_sq = np.nanmean(lambda_sq)
     fdata = np.zeros([len(phi_range)], dtype=complex)
     
 
@@ -371,8 +371,8 @@ if __name__ == "__main__":
 
             mask = datas["mask"]
             for key, value in datas.items():
-                if key not in ["mask", "freqs"]:
-                    datas[key] = np.ma.masked_array(data=value, mask=mask)
+                if key not in ["mask"]:
+                    datas[key] = np.ma.masked_array(data=value, mask=mask).compressed()
 
 
             freq, stokes_i, linear_pol ,fpol, fpol_err, pangle, pangle_err = (
@@ -399,7 +399,6 @@ if __name__ == "__main__":
 
             
             #plotting everything
-            lam2 = np.ma.masked_array(data=lam2, mask=mask)
 
             plt.close("all")
             fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
@@ -408,13 +407,11 @@ if __name__ == "__main__":
             ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
             ax[0].set_ylabel('Fractional Polarisation')
 
-            lam2 = lam2.compressed()
-            pangle = pangle.compressed()
             
             u_pangle = np.unwrap(pangle, period=np.pi, discont=np.pi/2)
             
             # ax[1].plot(lam2, pangle, "r+", label="original")
-            ax[1].errorbar(lam2, u_pangle, yerr=pangle_err.compressed(),
+            ax[1].errorbar(lam2, u_pangle, yerr=pangle_err,
                             fmt='o', ecolor="red", label="unwrapped angle")
             # linear fitting
             res = np.ma.polyfit(lam2, u_pangle, deg=1)

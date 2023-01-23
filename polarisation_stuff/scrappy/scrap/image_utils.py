@@ -99,7 +99,7 @@ def world_to_pixel_coords(ra, dec, wcs_ref):
         x and y pixel information
     """
     if isinstance(wcs_ref, str):
-        wcs = IOUtils.get_wcs(wcs_ref)
+        wcs = get_wcs(wcs_ref)
     else:
         wcs = wcs_ref
     world_coord = FK5(ra=ra*u.deg, dec=dec*u.deg)
