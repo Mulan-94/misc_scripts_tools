@@ -7,11 +7,11 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
 from matplotlib import ticker
-from casatasks import imstat
 from glob import glob
 import scipy.ndimage as snd
 
 from matplotlib import colors
+from matplotlib.ticker import PercentFormatter
 
 import sys
 import os
@@ -121,7 +121,7 @@ class PaperPlots:
     @staticmethod
     def figure_3_total_and_jets(i_image, mask, jet_mask, start=0.004, vmin=0,
             vmax=None, scale="linear", cmap="magma",
-            output=f"{PFIGS}/3-total-intensity", **kwargs):
+            output=f"{PFIGS}/3-total-intensity", kwargs=dict()):
         
         plt.close("all")
         """
@@ -174,6 +174,7 @@ class PaperPlots:
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
         cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.set_facecolor("black")
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
         ax.set_xlim(*xr)
         ax.set_ylim(*yr)
@@ -193,6 +194,7 @@ class PaperPlots:
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
         cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.set_facecolor("black")
         ax.contour(i_data, colors="g", linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
         ax.set_xlim(*xr)
@@ -209,12 +211,12 @@ class PaperPlots:
         # Plotting the jets now
         ######################################################################
         plt.close("all")
-        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        fig, ax = plt.subplots(figsize=(16,7), subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
         cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
         ax.contour(i_data, colors="g", linewidths=1, origin="lower", levels=levels)
         plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
-            location="top", shrink=1, fraction=0.15)
+            location="top", shrink=1, fraction=0.112)
         ax.set_xlim(*jxr)
         ax.set_ylim(*jyr)
         ax.tick_params(axis="x", top=False)
@@ -229,7 +231,7 @@ class PaperPlots:
     @staticmethod
     def figure_3b_chandra(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
         start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
-        output=f"{PFIGS}/chandra-3-total-intensity", **kwargs):
+        output=f"{PFIGS}/chandra-3-total-intensity", kwargs=dict()):
         """
         i_image:
             The data without masking. Will be zoomed in anyway
@@ -265,130 +267,6 @@ class PaperPlots:
         
         
         
-        xr = np.min(x)-wiggle, np.max(x)+wiggle
-        yr = np.min(y)-wiggle, np.max(y)+wiggle
-
-        # jet limits
-        jxr = np.min(jx)-wiggle, np.max(jx)+wiggle
-        jyr = np.min(jy)-wiggle, np.max(jy)+wiggle
-
-        use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)       
-
-        ######################################################################
-        # Plotting the Total intesity with contours
-        ######################################################################
-        plt.close("all")
-        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
-        ax = set_image_projection(ax)
-        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
-
-    
-        # ax.contour(chandra_data, colors="g", linewidths=1, origin="lower", levels=levels)
-        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
-            linewidths=1, origin="lower", levels=levels)
-
-        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0, shrink=.95,)
-        ax.set_xlim(*xr)
-        ax.set_ylim(*yr)
-        ax.tick_params(axis="x", top=False)
-        ax.tick_params(axis="y", right=False)
-        fig.canvas.draw()
-        fig.tight_layout()
-        print("Saving total intensity image at:   "+ output+"-cont")
-        fig.savefig(output+"-cont.png", dpi=DPI)
-
-
-        ######################################################################
-        # Plotting the jets now
-        ######################################################################
-        plt.close("all")
-        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
-        ax = set_image_projection(ax)
-        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
-        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
-            linewidths=1, origin="lower", levels=levels)
-        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
-            location="top", shrink=1, fraction=0.15)
-        ax.set_xlim(*jxr)
-        ax.set_ylim(*jyr)
-        ax.tick_params(axis="x", top=False)
-        ax.tick_params(axis="y", right=False)
-        fig.canvas.draw()
-        fig.tight_layout()
-        print("Saving jet image at:               "+ output)
-        fig.savefig(output+"-jet.png", dpi=DPI)
-        return
-    
-
-    def figure_3c_chandra_MF(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
-        start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
-        output=f"denii", **kwargs):
-        """
-        i_image:
-            The data without masking. Will be zoomed in anyway
-        mask:
-            The masked used from cleaning
-        jet_mask:
-            Mask for this jet
-        
-        """
-
-        plt.close("all")
-        plt.style.use("default")
-        scaling = {
-            "linear": colors.Normalize,
-            "log": colors.LogNorm,
-            "symmetric": colors.SymLogNorm,
-            "centered": colors.CenteredNorm,
-            "power": colors.PowerNorm
-        }
-        wcs = rfu.read_image_cube(i_image)["wcs"]
-        i_data = rfu.get_masked_data(i_image, mask)
-        chandra_data = rfu.get_masked_data(chandra, mask)
-        mask = i_data.mask
-
-        i_data = np.ma.masked_where(i_data<start, i_data)
-
-
-        jet_mask = np.logical_not(fits.getdata(jet_mask).squeeze())
-
-        levels = contour_levels(start, chandra_data)
-
-        wiggle = 20
-        y, x = np.where(mask == False)
-        jy, jx = np.where(jet_mask == False)
-
-        ########### RM stuff #################################################3
-        # mixin
-        angle_map = kwargs.pop("angle_map")
-        angle_data = np.ma.masked_array(
-            rfu.read_image_cube(angle_map)["data"],
-            mask=mask)
-
-        angle_data = np.rad2deg(angle_data) + ANGLE_OFFSET + ROT
-        angle_data = np.ma.masked_where(i_data<start, angle_data)
-        
-        skip = 7
-        slicex = slice(None, i_data.shape[0], skip)
-        slicey = slice(None, i_data.shape[-1], skip)
-        col, row = np.mgrid[slicex, slicey]
-
-        # get M vector by rotating E vector by 90
-        angle_data = angle_data[slicex, slicey]
-
-        # nornalize this, lenght of the vector
-        scales = 0.03
-    
-        # scale as amplitude
-        # u = scales * np.cos(angle_data)
-        # v = scales * np.sin(angle_data)
-        u = v = np.ones_like(angle_data) * scales
-        
-
-        
-        ########### END ################################################
-
-
         xr = np.min(x)-wiggle, np.max(x)+wiggle
         yr = np.min(y)-wiggle, np.max(y)+wiggle
 
@@ -407,9 +285,6 @@ class PaperPlots:
         cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
         ax.set_facecolor("black")
 
-        qv = ax.quiver(
-            row, col, u, v, angles=angle_data, pivot='tail', headlength=0,
-            width=0.0017, scale=5, headwidth=1, color="black")
     
         # ax.contour(chandra_data, colors="g", linewidths=1, origin="lower", levels=levels)
         ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
@@ -425,8 +300,27 @@ class PaperPlots:
         print("Saving total intensity image at:   "+ output+"-cont")
         fig.savefig(output+"-cont.png", dpi=DPI)
 
-        return
 
+        ######################################################################
+        # Plotting the jets now
+        ######################################################################
+        plt.close("all")
+        fig, ax = plt.subplots(figsize=(16,7), subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+        cs = ax.imshow(i_data, origin="lower", norm=use_scale, cmap=cmap)
+        ax.contour(snd.gaussian_filter(chandra_data, sigma=smooth_sigma), colors="g",
+            linewidths=1, origin="lower", levels=levels)
+        plt.colorbar(cs, label="Total Intensity [Jy/bm]", pad=0.005,
+            location="top", shrink=1, fraction=0.112)
+        ax.set_xlim(*jxr)
+        ax.set_ylim(*jyr)
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+        fig.canvas.draw()
+        fig.tight_layout()
+        print("Saving jet image at:               "+ output)
+        fig.savefig(output+"-jet.png", dpi=DPI)
+        return
     
     @staticmethod
     def figure_4b_intensity_contours(i_image, mask, start=0.004, smooth_sigma=13,
@@ -492,6 +386,7 @@ class PaperPlots:
         # for each (hyper)plane along axes not listed in the axes parameter,  
         # in this case axis 2 (the frequency axis)  
         """
+        from casatasks import imstat
         stats = imstat(cube, region=region, axes=[0,1])
         flux = stats["flux"]
         mean = stats["mean"]
@@ -531,6 +426,8 @@ class PaperPlots:
         # for each (hyper)plane along axes not listed in the axes parameter,  
         # in this case axis 2 (the frequency axis)  
         """
+        from casatasks import imstat
+
         
         estats = imstat(elobe, axes=[0,1], stretch=True)
         wstats = imstat(wlobe, axes=[0,1], stretch=True)
@@ -765,7 +662,7 @@ class PaperPlots:
             mask_data = i_data.mask
 
         if  not np.ma.is_masked(i_data):
-            i_data = np.ma.masked_array(i_data, mask=mask_data)
+            i_data = np.ma.masked_array(i_data, mask=mask_data, fill_value=np.nan)
         
         i_data = np.ma.masked_where(i_data<start, i_data)
 
@@ -977,7 +874,7 @@ class PaperPlots:
             colors="k", linewidths=0.5, origin="lower", levels=levels)
 
 
-        plt.colorbar(cs, label="Polarised Intensity | P |", pad=0)
+        plt.colorbar(cs, label="Polarised Brightness | P |", pad=0)
         
         ax.tick_params(axis="x", top=False)
         ax.tick_params(axis="y", right=False)
@@ -1174,7 +1071,7 @@ class PaperPlots:
         fpol = np.divide(np.abs(q_data + 1j*u_data), i_data)
 
         depoln = fpol[0]/fpol[-1]
-        depoln = np.ma.masked_array(data=depoln, mask=intensity.mask)
+        depoln = np.ma.masked_array(data=depoln, mask=intensity.mask, fill_value=np.nan)
 
         ydim, xdim = np.where(mask_data == False)
         wiggle = 20
@@ -1211,8 +1108,7 @@ class PaperPlots:
         plt.savefig(output, dpi=DPI)
         plt.close("all")
 
-    
-    @staticmethod
+    # @staticmethod
     def figure_12_13_rm_lobes_histogram(i_image, rm_image, emask, wmask, lmask, all_mask,
         start=0.004, smooth_sigma=0, output=f"{PFIGS}/12-rm-lobes.png"):
         """
@@ -1224,6 +1120,8 @@ class PaperPlots:
             Image containing the required RMs
         emask
             Eastern lobe mask
+        lmask
+            Both lobes mask
         wmask
             Western lobe mask
         all_mask
@@ -1239,13 +1137,10 @@ class PaperPlots:
         i_data = np.ma.masked_where(i_data<start, i_data)
 
         rm_lobes = rfu.get_masked_data(rm_image, lmask)
-        rm_lobes = np.ma.masked_where(i_data<start, rm_lobes)
 
         w_lobe = rfu.get_masked_data(rm_image, wmask)
         e_lobe = rfu.get_masked_data(rm_image, emask)
-        # w_lobe = np.ma.masked_array(data=rm_lobes, mask=wmask)
-        # e_lobe = np.ma.masked_array(data=rm_lobes, mask=emask)
-        
+
         wcs = rfu.read_image_cube(lmask)["wcs"]
 
         fig = plt.figure(figsize=FIGSIZE)
@@ -1275,33 +1170,47 @@ class PaperPlots:
         ydim, xdim = np.where(rm_lobes.mask == False)
         wiggle = 10
         bins = 50
+        log = False
         plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
         plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
 
         west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
-        west_hist.hist(w_lobe.compressed(), bins=bins, log=False,
-            orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="blue", 
+        west_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
+            orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="red",density=True, label="Source RMs",
+            histtype="step")
+        west_hist.hist(w_lobe.compressed(), bins=bins, log=log,
+            orientation="horizontal",fill=False, ls="-", lw=1, edgecolor="blue",density=True, label="West lobe",
             histtype="step")
 
         west_hist.minorticks_on()
         west_hist.yaxis.tick_right()
 
         west_hist.set_title("Western Lobe (Right Hand) RM Distribution")
-        west_hist.xaxis.set_visible(False)
+        west_hist.xaxis.set_visible(True)
+        west_hist.xaxis.set_major_formatter(PercentFormatter(xmax=.1))
+        west_hist.axes.set_xlabel("Data count")
+        west_hist.legend()
 
         east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
-        east_hist.hist(e_lobe.compressed(), bins=bins, log=False,
-            orientation="vertical", fill=False, ls="--", lw=1, edgecolor="blue",
+        east_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
+            orientation="vertical",fill=False, ls="--", lw=1, edgecolor="red", density=True, label="Source RMs",
+            histtype="step")
+        east_hist.hist(e_lobe.compressed(), bins=bins, log=log,
+            orientation="vertical", fill=False, ls="-", lw=1, edgecolor="blue", density=True, label="East lobe",
             histtype="step")
         east_hist.xaxis.tick_top()
         east_hist.minorticks_on()
         east_hist.set_title("Eastern Lobe (Left Hand) RM Distribution")
-        east_hist.yaxis.set_visible(False)
-        
+        east_hist.yaxis.set_visible(True)
+        east_hist.yaxis.set_major_formatter(PercentFormatter(xmax=.1))
+        east_hist.axes.set_ylabel("Data count")
+        east_hist.legend()
+
         plt.subplots_adjust(wspace=.01, hspace=0)
         
         east_hist.set_xlim(-200, 200)
         west_hist.set_ylim(-200, 200)
+        plt.tight_layout()
         fig.savefig(output)
         print(f"Output is at: {output}")
 
@@ -1342,37 +1251,13 @@ def fixer():
             os.makedirs(os.path.join(PFIGS, o_dir))
 
 
-    # PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
-    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
-    
-    # PaperPlots.figure_rm_map(imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
-    # PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
+    PaperPlots.figure_12_13_rm_lobes_histogram(
+        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+        f"{mask_dir}/true_mask.fits")
 
-    # tloops = [
-    #     # "rm-tools-test/cirada-rm-no-f/heres-polAngle0Fit_deg.fits",
-    #     # "rm-tools-test/pipe-3d-out/q-image-cube_polAngle0Fit_deg.fits",
-    #     # "rm-tools-test/lim-4k.fits",
-    #     pangle_map,
-    # ]
-    # for _t, tloop in enumerate(tloops):
-    #     PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, 
-    #         tloop,
-    #         mask, output=f"rmap_with_vecs-ROT-{ROT}-{_t}")
-
-
-    # For presentation
-    # PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask, output="defauts", vmax=0.7)
-    # PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
-    #     output=f"defauts", 
-    #     vmin=0, vmax=None, scale="linear", cmap="gray_r")
-    # PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask, output='defauts')
-    
-    PaperPlots.figure_3c_chandra_MF(imgs[0], mask, chandra=chandra[0],
-        chandra_jet=chandra[1], jet_mask=jet_mask,
-        output="DENNIII", 
-        vmin=0, vmax=1e-1, scale="linear", cmap="magma", angle_map=pangle_map)
-
-
+  
 
 
 def run_paper_mill():
@@ -1586,6 +1471,7 @@ def parser():
 if __name__ == "__main__":
 
     run_paper_mill()
+    # fixer()
 
     """       
     Running this script with

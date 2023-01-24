@@ -77,7 +77,7 @@ def merotate2(img, angle, pivot):
     padx = [img.shape[1] - pivot[0], pivot[0]]
     pady = [img.shape[0] - pivot[1], pivot[1]]
     paded = np.pad(img, [pady, padx], 'constant')
-    rotated = rotate(paded, angle, reshape=False)
+    rotated = rotate(paded, angle, reshape=False, output="uint8")
     return rotated[pady[0]:-pady[1], padx[0]:-padx[1]]
 
 
@@ -194,7 +194,7 @@ def parser():
 def main():
     opts = parser().parse_args()
 
-    for i, oname, regname in enumerate(zip_longest(opts.oname, opts.regname)):
+    for i,( oname, regname) in enumerate(zip_longest(opts.oname, opts.regname)):
         if oname is None:
             oname = f"output-mask-{i}.fits"
         make_mask(opts.iname, oname, above=opts.above, below=opts.below,

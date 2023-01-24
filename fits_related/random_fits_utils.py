@@ -3,6 +3,7 @@ import numpy as np
 from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
+
 from ipdb import set_trace
 
 
@@ -24,12 +25,14 @@ def read_image_cube(imname, mask=False):
         wcs = WCS(hdr).celestial
 
     if mask:
+        data = data.astype("bool")
+        data = np.logical_not(data)
+        data = data.astype("uint8")
         """
         Read mask and then invert it to comply with numpy mask
         For image mask, the mask is 1 where the image is to be seen
         In numpy, when mask is 1, it means flag out 
         """
-        data =  ~np.asarray(data, dtype=bool)
     return dict(hdr=hdr, data=data, wcs=wcs)
 
 def make_mask(imname, xy_dims=None):
@@ -143,8 +146,7 @@ def get_masked_data(img_name, mask_name):
     """
     image = read_image_cube(img_name, mask=False)["data"]
     mask = read_image_cube(mask_name, mask=True)["data"]
-
-    image = np.ma.masked_array(data=image, mask=mask)
+    image = np.ma.masked_array(data=image, mask=mask, fill_value=np.nan)
     return image
 
 
