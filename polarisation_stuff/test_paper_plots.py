@@ -1219,7 +1219,7 @@ class PaperPlots:
 def fixer():
     """Text it fixit self contained testing thingy"""
     cubes = sorted(glob(
-            os.path.join(".", os.environ["sel_cubes"], "*-image-cube.fits")
+            os.path.join(".", os.environ["conv_cubes"], "*-image-cube.fits")
             ))[:3]
 
     imgs = sorted(glob("./*-mfs.fits"))
@@ -1272,7 +1272,7 @@ def run_paper_mill():
     What are used in this function?
 
     1. selected image cubes from
-    intermediates/selection-cubes/i-image-cube.fits',
+    intermediates/conv-cubes/i-image-cube.fits',
     
     2. The multifreq images from where this script is running:
         ./i-mfs.fits
@@ -1292,7 +1292,7 @@ def run_paper_mill():
     print("Running paper mill")
     print("----------------------------")
     cubes = sorted(glob(
-            os.path.join(".", os.environ["sel_cubes"], "*-image-cube.fits")
+            os.path.join(".", os.environ["conv_cubes"], "*-image-cube.fits")
             ))[:3]
 
     imgs = sorted(glob("./*-mfs.fits"))

@@ -113,8 +113,8 @@ def make_syncd_data_stores(size, syncd=True):
 
     
 
-def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg, threshold,
-    global_noise):
+def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg,
+    threshold, global_noise):
     """
     triplets: tuple
         A tuple with (i,q,u) image name
