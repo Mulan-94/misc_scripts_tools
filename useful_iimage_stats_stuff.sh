@@ -62,50 +62,6 @@ box(blc, trc)
 
 
 
-
-# reg_file = "channelised/beacons2-pix-mod.reg"
-file_core = "regions-mpc"
-
-reg_file = generate_regions(factor=50, "regions/beacons2.reg")
-regs = regions.Regions.read(reg_file, format="ds9")
-
-noise_reg = regs.pop(-1)
-
-start = perf_counter()
-
-for stokes in "Q U".split():
-    images = sorted(glob(f"./channelised/*/*00*{stokes}*image*"))
-    print(f"Working on Stokes {stokes}")
-    
-    # out_dir = make_out_dir(f"{stokes}-{file_core}")
-    # for reg in regs:
-    #     #Q and U for each region
-    #     fluxes, waves = [], []
-    #     print(f"Region: {reg.meta['label']}")
-
-    #     with futures.ProcessPoolExecutor() as executor:
-    #         results = executor.map(
-    #             partial(extract_stats, reg=reg, noise_reg=noise_reg), images
-    #             )
-
-        # for fname in images:
-        #     res = extract_stats(fname, reg, noise_reg, sig_factor=10)
-        #     if res is not None:
-        #         flux, wave = res
-        #         fluxes.append(flux)
-        #         waves.append(wave)
-        # set_trace()
-        # np.savez(os.path.join(out_dir, f"{reg.meta['label']}_{stokes}"), 
-        #     flux=fluxes, waves=waves)
-    get_image_stats(stokes, file_core, images, regs)
-
-plot_spectra(file_core, f"QU-{file_core}")
-
-print(f"Finished in {perf_counter() - start} seconds")
-print("======================================")
-
-
-
 '''
 calculate the SPECtral index of some images CASA spi
 1. Select the highest and lowest frequency images
