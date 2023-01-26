@@ -109,9 +109,9 @@ def set_image_projection(image_obj):
 
 
 
-######################################################################################
+############################################################################
 ## contours plotting and vectors
-######################################################################################
+############################################################################
 
 # ref https://stackoverflow.com/questions/40939821/how-to-plot-a-vector-field-over-a-contour-plot-in-matplotlib
 
@@ -167,9 +167,9 @@ class PaperPlots:
         use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)
 
 
-        ######################################################################
+        ####################################################################
         # Plotting the Total intesity WITHOUT contours
-        ######################################################################
+        ####################################################################
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -187,9 +187,9 @@ class PaperPlots:
         fig.savefig(output+".png", dpi=DPI)
         
 
-        ######################################################################
+        ####################################################################
         # Plotting the Total intesity with contours
-        ######################################################################
+        ####################################################################
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -207,9 +207,9 @@ class PaperPlots:
         fig.savefig(output+"-cont.png", dpi=DPI)
 
 
-        ######################################################################
+        ####################################################################
         # Plotting the jets now
-        ######################################################################
+        ####################################################################
         plt.close("all")
         fig, ax = plt.subplots(figsize=(16,7), subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -276,9 +276,9 @@ class PaperPlots:
 
         use_scale = scaling.get(scale, "linear")(vmin=vmin, vmax=vmax, **kwargs)       
 
-        ######################################################################
+        ####################################################################
         # Plotting the Total intesity with contours
-        ######################################################################
+        ####################################################################
         plt.close("all")
         fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -301,9 +301,9 @@ class PaperPlots:
         fig.savefig(output+"-cont.png", dpi=DPI)
 
 
-        ######################################################################
+        ####################################################################
         # Plotting the jets now
-        ######################################################################
+        ####################################################################
         plt.close("all")
         fig, ax = plt.subplots(figsize=(16,7), subplot_kw={'projection': wcs})
         ax = set_image_projection(ax)
@@ -395,11 +395,14 @@ class PaperPlots:
 
         fig, ax = plt.subplots(figsize=FIGSIZE)
         ax.plot(chans, flux, "ko", label="flux [Jy]")
-        ax.plot(chans, snd.gaussian_filter(flux, sigma=3), "k--", label="flux fit")
+        ax.plot(chans, snd.gaussian_filter(flux, sigma=3), "k--",
+            label="flux fit")
         # ax.errorbar(chans, mean, yerr=sigma)
         ax.plot(chans, mean, "bo", label=r"$\mu$ [Jy/beam]")
-        ax.plot(chans, snd.gaussian_filter(mean, sigma=3), "b--", label=r"$\mu$ fit ")
-        ax.fill_between(chans, mean-sigma, mean+sigma, color="b", alpha=0.3, label=r"$\sigma$")
+        ax.plot(chans, snd.gaussian_filter(mean, sigma=3), "b--",
+            label=r"$\mu$ fit ")
+        ax.fill_between(chans, mean-sigma, mean+sigma, color="b",
+            alpha=0.3, label=r"$\sigma$")
 
         ax.set_xlabel("Channel")
         ax.set_ylabel("Spectral fluxes*")
@@ -412,7 +415,8 @@ class PaperPlots:
 
     
     @staticmethod
-    def table3_lobe_flux_wfreq(elobe, wlobe, output=f"{PFIGS}/3-table-lobe-fluxes.png", smooth_sigma=10):
+    def table3_lobe_flux_wfreq(elobe, wlobe,
+        output=f"{PFIGS}/3-table-lobe-fluxes.png", smooth_sigma=10):
         """
         Monitor change of lobes' flux with frequncy
         (e|w)lobe:
@@ -470,8 +474,8 @@ class PaperPlots:
 
     
     @staticmethod
-    def figure_5b_spi_wintensity_contours(i_image, spi_image, mask, start=0.004, smooth_sigma=13,
-        output=f"{PFIGS}/5b-spi-intensity-contours.png"):
+    def figure_5b_spi_wintensity_contours(i_image, spi_image, mask, start=0.004,
+        smooth_sigma=13, output=f"{PFIGS}/5b-spi-intensity-contours.png"):
         """
         i_image:
             The total intensity image
@@ -526,8 +530,9 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_8_dop_magnetic_fields_contours(i_image, fp_image, angle_image, mask,
-        start=0.004, smooth_sigma=1, output=f"{PFIGS}/8-dop-contours-mfs.png"):
+    def figure_8_dop_magnetic_fields_contours(i_image, fp_image, angle_image,
+        mask, start=0.004, smooth_sigma=1,
+        output=f"{PFIGS}/8-dop-contours-mfs.png"):
         """
         LINES SHOW DEGREE OF POLARIZATION HERE!
         # Degree of polzn lines vs contours
@@ -630,8 +635,9 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_8b_dop_magnetic_fields_contours(i_image, fpol_image, angle_image, mask,
-        start=0.004, smooth_sigma=1, output=f"{PFIGS}/8b-dop-contours-mfs.png"):
+    def figure_8b_dop_magnetic_fields_contours(i_image, fpol_image,
+        angle_image, mask, start=0.004, smooth_sigma=1,
+        output=f"{PFIGS}/8b-dop-contours-mfs.png"):
         """
         COLOUR MAP SHOWS FRACTIONA POLZN HERE!!
 
@@ -948,8 +954,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_rm_map_b_with_mf(i_image, rm_map, angle_image, mask, start=0.004, smooth_sigma=1,
-        output=f"{PFIGS}/rm-map-wmf.png"):
+    def figure_rm_map_b_with_mf(i_image, rm_map, angle_image, mask,
+        start=0.004, smooth_sigma=1, output=f"{PFIGS}/rm-map-wmf.png"):
         """
         Plot the RM-MAP
         Only where the total intensity is greater thab start
@@ -1045,8 +1051,8 @@ class PaperPlots:
 
 
     @staticmethod
-    def figure_14_depolarisation(intensity, i_cube, q_cube, u_cube, mask, start=0.004,
-        smooth_sigma=1, output=f"{PFIGS}/14-depolzn.png"):
+    def figure_14_depolarisation(intensity, i_cube, q_cube, u_cube, mask,
+        start=0.004, smooth_sigma=1, output=f"{PFIGS}/14-depolzn.png"):
         """
         Here we shall get the cube and use the first and last channels. We 
         therefore do not use the single generated FPOL map.
@@ -1071,7 +1077,8 @@ class PaperPlots:
         fpol = np.divide(np.abs(q_data + 1j*u_data), i_data)
 
         depoln = fpol[0]/fpol[-1]
-        depoln = np.ma.masked_array(data=depoln, mask=intensity.mask, fill_value=np.nan)
+        depoln = np.ma.masked_array(data=depoln, mask=intensity.mask,
+            fill_value=np.nan)
 
         ydim, xdim = np.where(mask_data == False)
         wiggle = 20
@@ -1091,7 +1098,8 @@ class PaperPlots:
 
         cs = ax.imshow(depoln,
                 origin="lower", cmap="coolwarm", vmin=0, vmax=2, aspect="equal")
-        plt.colorbar(cs, label="Depolarization ratio, [repolarization>1, depolarization <1]",
+        plt.colorbar(cs,
+            label="Depolarization ratio, [repolarization>1, depolarization <1]",
             pad=0)
 
         
@@ -1109,8 +1117,9 @@ class PaperPlots:
         plt.close("all")
 
     # @staticmethod
-    def figure_12_13_rm_lobes_histogram(i_image, rm_image, emask, wmask, lmask, all_mask,
-        start=0.004, smooth_sigma=0, output=f"{PFIGS}/12-rm-lobes.png"):
+    def figure_12_13_rm_lobes_histogram(i_image, rm_image, emask, wmask,
+        lmask, all_mask, start=0.004, smooth_sigma=0,
+        output=f"{PFIGS}/12-rm-lobes.png"):
         """
         RM and histogram for lobes 
 
@@ -1145,7 +1154,8 @@ class PaperPlots:
 
         fig = plt.figure(figsize=FIGSIZE)
         
-        image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2, projection=wcs)
+        image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2,
+            projection=wcs)
         image = set_image_projection(image)
         
         # swich of these ticks
@@ -1176,10 +1186,12 @@ class PaperPlots:
 
         west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
         west_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
-            orientation="horizontal",fill=False, ls="--", lw=1, edgecolor="red",density=True, label="Source RMs",
+            orientation="horizontal",fill=False, ls="--", lw=1,
+            edgecolor="red",density=True, label="Source RMs",
             histtype="step")
         west_hist.hist(w_lobe.compressed(), bins=bins, log=log,
-            orientation="horizontal",fill=False, ls="-", lw=1, edgecolor="blue",density=True, label="West lobe",
+            orientation="horizontal",fill=False, ls="-", lw=1,
+            edgecolor="blue",density=True, label="West lobe",
             histtype="step")
 
         west_hist.minorticks_on()
@@ -1193,10 +1205,12 @@ class PaperPlots:
 
         east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
         east_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
-            orientation="vertical",fill=False, ls="--", lw=1, edgecolor="red", density=True, label="Source RMs",
+            orientation="vertical",fill=False, ls="--", lw=1, edgecolor="red",
+            density=True, label="Source RMs",
             histtype="step")
         east_hist.hist(e_lobe.compressed(), bins=bins, log=log,
-            orientation="vertical", fill=False, ls="-", lw=1, edgecolor="blue", density=True, label="East lobe",
+            orientation="vertical", fill=False, ls="-", lw=1, edgecolor="blue",
+            density=True, label="East lobe",
             histtype="step")
         east_hist.xaxis.tick_top()
         east_hist.minorticks_on()
@@ -1322,12 +1336,17 @@ def run_paper_mill():
         if not os.path.isdir(os.path.join(PFIGS,o_dir)):
             os.makedirs(os.path.join(PFIGS,o_dir))
 
+    print("starting")
 
-    PaperPlots.table2_core_flux_wfreq(cubes[0], region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
-    PaperPlots.table3_lobe_flux_wfreq(elobe="east-lobe-cube.fits", wlobe="west-lobe-cube.fits")
+    PaperPlots.table2_core_flux_wfreq(cubes[0],
+        region=f"{mask_dir}/important_regions/hotspots/core-ctrf")
+    PaperPlots.table3_lobe_flux_wfreq(elobe=f"{products}/east-lobe-cube.fits",
+        wlobe=f"{products}/west-lobe-cube.fits")
 
-    PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
-    PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map, pangle_map, mask)
+    PaperPlots.figure_8_dop_magnetic_fields_contours(imgs[0], fp_map,
+        pangle_map, mask)
+    PaperPlots.figure_8b_dop_magnetic_fields_contours(imgs[0], fp_map,
+        pangle_map, mask)
     PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
     PaperPlots.figure_10_linear_poln(imgs[0], lp_map, mask)
     PaperPlots.figure_14_depolarisation(imgs[0], *cubes, mask)
@@ -1342,7 +1361,8 @@ def run_paper_mill():
         vmin=1e-2, vmax=1e-1, scale="linear", cmap="magma")
 
     PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
-        output=f"{PFIGS}/fig3/total-intensity-power-scale", vmin=1e-2, vmax=0.55e-1,
+        output=f"{PFIGS}/fig3/total-intensity-power-scale", vmin=1e-2,
+        vmax=0.55e-1,
         scale="power", cmap="magma", kwargs={"gamma": 3.8})
 
     # with chandra
@@ -1386,17 +1406,6 @@ def run_paper_mill():
     
     PaperPlots.figure_rm_map_b_with_mf(imgs[0], rm_map, pangle_map, mask)
 
-    
-    # for _ in range(idata.shape[0]):
-        # PaperPlots.figure_8_dop_magnetic_fields_contours(
-        #     idata[_], qdata[_], udata[_], mask,
-        #     output=f"{PFIGS}/fig8/poln{_}.png")
-        # PaperPlots.figure_9a_fractional_poln(
-        #     idata[_], qdata[_], udata[_], mask,
-        #     output=f"{PFIGS}/fig9/9a-dop-chan-{_}.png")
-        # PaperPlots.figure_10_linear_poln(
-        #     idata[_], qdata[_], udata[_], mask,
-        #     output=f"{PFIGS}/fig10/10-lpol-chan-{_}.png")
 
     print("----------------------------")
     print("Paper mill stopped")

@@ -197,9 +197,12 @@ def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
 
     # get location of peak polzn intensity
     peak_lpol = np.abs(single_pxl_poln).max()
-    max_pol_idx = np.where(np.abs(single_pxl_poln)==peak_lpol)[0][0]  
+    # max_pol_idx = np.where(np.abs(single_pxl_poln)==peak_lpol)[0][0]  
+    # snitch.info(f"x: {y}, y:{x}, max polzn intensity @ chan: {max_pol_idx}")
+
+    # take fpol at the highest frequency
     peak_fpol = nfp[-1]
-    snitch.info(f"x: {y}, y:{x}, max polzn intensity @ chan: {max_pol_idx}")
+    
     return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol, peak_lpol
 
 

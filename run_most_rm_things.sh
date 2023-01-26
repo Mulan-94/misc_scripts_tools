@@ -230,6 +230,11 @@ runScrappy(){
     # arg4: bool
     #   Generate bokeh plots
 
+
+    # for scrappy
+    # I change region size from 5pix to 3 pixels.
+    # Set minimum noise * threshold above which to generate regions
+
     local thresh=$([ ! -z "$1" ] && echo $1 || echo 10)
     local regsize=$([ ! -z "$2" ] && echo $2 || echo 3)
     local scout=$([ ! -z "$3" ] && echo $3 || echo "scrappy-out")
@@ -277,7 +282,7 @@ generateRmMap(){
         fails, check on that"
     echo "Default maximum depth and number of iterations same as that of previous"
     echo -e "############################################################\n"
-    python qu_pol/pica_rm-x2.py -q $conv_cubes/q-conv-image-cube.fits \
+    python qu_pol/scrappy/rmsynthesis/rmmap-x2.py -q $conv_cubes/q-conv-image-cube.fits \
         -u $conv_cubes/u-conv-image-cube.fits \
         -i $conv_cubes/i-conv-image-cube.fits -ncore 120 \
         -o $prods/initial -mask $mask_dir/true_mask.fits -f frequencies.txt
@@ -367,9 +372,9 @@ makeLobeCubes(){
 
 
     fitstool.py --prod $conv_cubes/i-conv-image-cube.fits $mask_dir/east-lobe.fits \
-        -o ./east-lobe-cube.fits
+        -o ./$prods/east-lobe-cube.fits
     fitstool.py --prod $conv_cubes/i-conv-image-cube.fits $mask_dir/west-lobe.fits \
-        -o ./west-lobe-cube.fits
+        -o ./$prods/west-lobe-cube.fits
 
     return 0
 }
@@ -447,10 +452,6 @@ testing(){
 
     # # running the high snr stuff
     # # runScrappy 800 3 $scout-hi-snr false
-
-    # makeLobeCubes
-
-    makeLobeCubes
     makePlotsforPaper
 
     return 0
