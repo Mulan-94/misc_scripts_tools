@@ -34,7 +34,7 @@ from scrap.plotting import overlay_regions_on_source_plot
 
 def initialise_globals(odir="scrappy-out"):
     global ODIR, RDIR, PLOT_DIR, LOS_DIR, RFILE, CURRENT_RFILE, NRFILE
-    global OVERWRITE, MFT, REG_SIZE, NWORKERS
+    global OVERWRITE, MFT, REG_SIZE, NWORKERS, USE_POLZD_SNR
 
     ODIR = fullpath(os.curdir, odir)
 
@@ -50,6 +50,7 @@ def initialise_globals(odir="scrappy-out"):
     MFT = 0.7
     REG_SIZE = 30
     NWORKERS = 16
+    USE_POLZD_SNR = False
     return
 
 
@@ -154,11 +155,12 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg,
     signal_q = region_flux_jybm(reg, q_data.data)
     signal_u = region_flux_jybm(reg, u_data.data)
 
-    # snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
-    # noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
-
-    # get snr of total intensity to global total intensity noise
-    snr = signal_to_noise(signal_i, global_noise)
+    if USE_POLZD_SNR:
+        snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
+        # noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
+    else:
+        # get snr of total intensity to global total intensity noise
+        snr = signal_to_noise(signal_i, global_noise)
 
  
     # Check 2: Is the region above the threshold ?
@@ -423,6 +425,9 @@ def main():
 
     if opts.nworkers is not None:
         NWORKERS = opts.nworkers
+
+    if opts.polzd_snr:
+        USE_POLZD_SNR = opts.polzd_snr
 
     # For regions
     if opts.regions_only or "r" in todo:
