@@ -16,9 +16,20 @@ from matplotlib.ticker import PercentFormatter
 import sys
 import os
 
-sys.path.append(f"{os.environ['HOME']}/git_repos/misc_scripts_n_tools/fits_related/")
+PATH = set(sys.path)
+append = [
+    f"{os.environ['HOME']}/git_repos/misc_scripts_n_tools/fits_related/",
+    f"{os.environ['HOME']}/git_repos/misc_scripts_n_tools/qu_pol/scrappy/"
+]
+
+for ap in append:
+    if not PATH.issuperset(ap):
+        sys.path.append(ap)
+
+
 
 import random_fits_utils as rfu
+from utils.rmmath import frac_polzn_error, frac_polzn
 from ipdb import set_trace
 
 
@@ -76,6 +87,8 @@ https://link.springer.com/content/pdf/10.1007/s10686-016-9517-y.pdf
 
 
 warnings.filterwarnings("ignore", module="astropy")
+
+spectest = "/home/andati/pica/reduction/testing_spectra"
 
 FIGSIZE = (16,9)
 EXT = ".png"
@@ -1116,6 +1129,99 @@ class PaperPlots:
         plt.savefig(output, dpi=DPI)
         plt.close("all")
 
+
+    @staticmethod
+    def figure_14_depolarisation_errmap(intensity, i_cube, q_cube, u_cube, mask,
+        start=0.004, smooth_sigma=1, noise_file=None,
+        output=f"{PFIGS}/14-depolzn-errors.png"):
+        """
+        Here we shall get the cube and use the first and last channels. We 
+        therefore do not use the single generated FPOL map.
+
+        intensity: 
+            Single image with for the intensity contours. Usually the MFS
+        (i|q|u)-image
+            CUBES containing data for all the channels available. I will only use the
+            first and last channels available int he cube
+        """
+        rg_data = dict(np.load(noise_file))
+        errs = {key.lower(): rg_data[key][[0,-1], None, None] for key in 
+            ["I_err", "Q_err", "U_err"]}
+        mask_data = fits.getdata(mask).squeeze()
+        mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
+
+        intensity = rfu.get_masked_data(intensity, mask)
+        intensity = np.ma.masked_where(intensity<start, intensity)
+
+        # select the first and last channels only
+        i_data = fits.getdata(i_cube).squeeze()[[0,-1]]
+        q_data = fits.getdata(q_cube).squeeze()[[0,-1]]
+        u_data = fits.getdata(u_cube).squeeze()[[0,-1]]
+
+
+        # # # fpol = frac_polzn(i_data, q_data, u_data)
+        # # # depoln = fpol[0]/fpol[-1]
+        # # # depoln = np.ma.masked_array(data=depoln, mask=intensity.mask,
+        # # #     fill_value=np.nan).compressed()
+        # # # fpol_err = frac_polzn_error(i_data, q_data, u_data,
+        # # #     errs["i_err"], errs["q_err"], errs["u_err"])
+        # # # depoln_err = fpol_err[0]/fpol_err[-1]
+        # # # depoln_err = np.ma.masked_array(data=depoln_err, mask=intensity.mask,
+        # # #     fill_value=np.nan)
+        # # # plt.errorbar(np.arange(depoln.size), 
+        # # #     depoln, yerr=depoln_err.compressed(), 
+        # # # fmt="o")
+        # # # set_trace()
+        # # # plt.savefig(output+"plt.png")
+
+
+        
+        fpol_err = frac_polzn_error(i_data, q_data, u_data,
+            errs["i_err"], errs["q_err"], errs["u_err"])
+
+
+        depoln_err = fpol_err[0]/fpol_err[-1]
+        depoln_err = np.ma.masked_array(data=depoln_err, mask=intensity.mask,
+            fill_value=np.nan)
+
+        
+
+        ydim, xdim = np.where(mask_data == False)
+        wiggle = 20
+        xlims = np.min(xdim)-wiggle, np.max(xdim)+wiggle
+        ylims = np.min(ydim)-wiggle, np.max(ydim)+wiggle
+
+        wcs = rfu.read_image_cube(mask)["wcs"]
+
+        levels = contour_levels(start, intensity)
+
+        fig, ax = plt.subplots(figsize=FIGSIZE, subplot_kw={'projection': wcs})
+        ax = set_image_projection(ax)
+
+        ax.contour(
+            snd.gaussian_filter(intensity, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+
+        cs = ax.imshow(depoln_err,
+                origin="lower", cmap="coolwarm", aspect="equal")
+        plt.colorbar(cs,
+            label="Depolarization error",
+            pad=0)
+
+        
+        ax.tick_params(axis="x", top=False)
+        ax.tick_params(axis="y", right=False)
+
+        plt.xlim(*xlims)
+        plt.ylim(*ylims)
+        fig.canvas.draw()
+        fig.tight_layout()
+        
+        print(f"Saving plot: {output}")
+        
+        plt.savefig(output, dpi=DPI)
+        plt.close("all")
+
     # @staticmethod
     def figure_12_13_rm_lobes_histogram(i_image, rm_image, emask, wmask,
         lmask, all_mask, start=0.004, smooth_sigma=0,
@@ -1229,6 +1335,132 @@ class PaperPlots:
         print(f"Output is at: {output}")
 
 
+    def figure_12_13_rm_lobes_histogram_rick(i_image, rm_image, emask, wmask,
+        lmask, all_mask, rick_rm, rick_east, rick_west, 
+        start=0.004, smooth_sigma=0,
+        output=f"{PFIGS}/12-rm-lobes-with-ricks.png"):
+        """
+        RM and histogram for lobes 
+
+        i_image:
+            Image to be used for the intensity contours. Usually MFS
+        rm_image
+            Image containing the required RMs
+        emask
+            Eastern lobe mask
+        lmask
+            Both lobes mask
+        wmask
+            Western lobe mask
+        all_mask
+            Pictor A mask
+        start
+            Where the contours should start 0.0552
+        smooth_sigma
+            Factor to smooth the contours
+        """
+        plt.close("all")
+        i_data = rfu.get_masked_data(i_image, all_mask)
+
+        i_data = np.ma.masked_where(i_data<start, i_data)
+
+        rm_lobes = rfu.get_masked_data(rm_image, lmask)
+
+        w_lobe = rfu.get_masked_data(rm_image, wmask)
+        e_lobe = rfu.get_masked_data(rm_image, emask)
+
+        # ricks data
+        rw_lobe = rfu.get_masked_data(rick_rm, rick_west)
+        re_lobe = rfu.get_masked_data(rick_rm, rick_east)
+
+        wcs = rfu.read_image_cube(lmask)["wcs"]
+
+        fig = plt.figure(figsize=FIGSIZE)
+        
+        image = plt.subplot2grid((3,3), (1,0), rowspan=2, colspan=2,
+            projection=wcs)
+        image = set_image_projection(image)
+        
+        # swich of these ticks
+        image.tick_params(axis="x", top=False)
+        image.tick_params(axis="y", right=False)
+        # #image.axis("off")
+
+        ca = image.imshow(
+            rm_lobes, origin="lower", cmap="coolwarm", vmin=-45,
+            vmax=85, aspect="equal")
+        
+        plt.colorbar(ca, location="right", shrink=0.90,
+            label="RM", drawedges=False, pad=0)
+
+        levels = contour_levels(start, i_data)
+        image.contour(
+            snd.gaussian_filter(i_data, sigma=smooth_sigma),
+            colors="k", linewidths=0.5, origin="lower", levels=levels)
+        
+
+        # so that I can zoom into the image easily and automatically
+        ydim, xdim = np.where(rm_lobes.mask == False)
+        wiggle = 10
+        bins = 50
+        log = False
+        plt.xlim(np.min(xdim)-wiggle, np.max(xdim)+wiggle)
+        plt.ylim(np.min(ydim)-wiggle, np.max(ydim)+wiggle)
+
+        west_hist = plt.subplot2grid((3,3), (1,2), rowspan=2, colspan=1)
+        west_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
+            orientation="horizontal",fill=False, ls="--", lw=1,
+            edgecolor="black",density=True, label="All RMs",
+            histtype="step")
+        west_hist.hist(w_lobe.compressed(), bins=bins, log=log,
+            orientation="horizontal",fill=False, ls="-", lw=1,
+            edgecolor="blue",density=True, label="West lobe",
+            histtype="step")
+        west_hist.hist(rw_lobe.compressed(), bins=bins, log=log,
+            orientation="horizontal",fill=False, ls="-", lw=1,
+            edgecolor="red",density=True, label="P97 West lobe",
+            histtype="step")
+
+        west_hist.minorticks_on()
+        west_hist.yaxis.tick_right()
+
+        west_hist.set_title("Western Lobe (Right Hand) RM Distribution")
+        west_hist.xaxis.set_visible(True)
+        west_hist.xaxis.set_major_formatter(PercentFormatter(xmax=.1))
+        west_hist.axes.set_xlabel("Data count")
+        west_hist.legend()
+
+        east_hist = plt.subplot2grid((3,3), (0,0), colspan=2, rowspan=1)
+        east_hist.hist(rm_lobes.compressed(), bins=bins, log=log,
+            orientation="vertical",fill=False, ls="--", lw=1, edgecolor="black",
+            density=True, label="All RMs",
+            histtype="step")
+        east_hist.hist(e_lobe.compressed(), bins=bins, log=log,
+            orientation="vertical", fill=False, ls="-", lw=1, edgecolor="blue",
+            density=True, label="East lobe",
+            histtype="step")
+        east_hist.hist(re_lobe.compressed(), bins=bins, log=log,
+            orientation="vertical", fill=False, ls="-", lw=1, edgecolor="red",
+            density=True, label="P97 East lobe",
+            histtype="step")
+        east_hist.xaxis.tick_top()
+        east_hist.minorticks_on()
+        east_hist.set_title("Eastern Lobe (Left Hand) RM Distribution")
+        east_hist.yaxis.set_visible(True)
+        east_hist.yaxis.set_major_formatter(PercentFormatter(xmax=.1))
+        east_hist.axes.set_ylabel("Data count")
+        east_hist.legend()
+
+        plt.subplots_adjust(wspace=.01, hspace=0)
+        
+        east_hist.set_xlim(-200, 200)
+        west_hist.set_ylim(-200, 200)
+        plt.tight_layout()
+        fig.savefig(output)
+        print(f"Output is at: {output}")
+
+
+
 
 def fixer():
     """Text it fixit self contained testing thingy"""
@@ -1256,22 +1488,28 @@ def fixer():
     udata = rfu.read_image_cube(cubes[2])["data"]
 
     chandra = [
-        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra.fits",
-        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
+        f"{spectest}/from_martin/chandra.fits",
+        f"{spectest}/from_martin/chandra-jet.fits"
         ]
 
     for o_dir in ["fig3", "fig4", "fig8", "fig9", "fig10"]:
         if not os.path.isdir(os.path.join(PFIGS, o_dir)):
             os.makedirs(os.path.join(PFIGS, o_dir))
 
+    
+    # PaperPlots.figure_12_13_rm_lobes_histogram_rick(
+    #     imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+    #     f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+    #     f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+    #     f"{mask_dir}/true_mask.fits",
+    #     f"{spectest}/from_rick/4k-proj/band-l-and-c-LCPIC-10.RM10.2.FITS-projected.fits",
+    #     f"{mask_dir}/rick-east-rm2.fits",
+    #     f"{mask_dir}/rick-west-rm2.fits",)
 
-    PaperPlots.figure_12_13_rm_lobes_histogram(
-        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
-        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
-        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
-        f"{mask_dir}/true_mask.fits")
+    PaperPlots.figure_14_depolarisation_errmap(imgs[0], *cubes, mask,
+        noise_file=f"{products}/scrap-outputs-s3/los-data/reg_1.npz")
 
-  
+
 
 
 def run_paper_mill():
@@ -1327,8 +1565,8 @@ def run_paper_mill():
     udata = rfu.read_image_cube(cubes[2])["data"]
 
     chandra = [
-        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra.fits",
-        "/home/andati/pica/reduction/testing_spectra/from_martin/chandra-jet.fits"
+        f"{spectest}/from_martin/chandra.fits",
+        f"{spectest}/from_martin/chandra-jet.fits"
         ]
 
     for o_dir in ["fig3", "fig4", #"fig8", "fig9", "fig10"
@@ -1350,6 +1588,8 @@ def run_paper_mill():
     PaperPlots.figure_9a_fractional_poln(imgs[0], fp_map, mask)
     PaperPlots.figure_10_linear_poln(imgs[0], lp_map, mask)
     PaperPlots.figure_14_depolarisation(imgs[0], *cubes, mask)
+    PaperPlots.figure_14_depolarisation_errmap(imgs[0], *cubes, mask,
+        noise_file=f"{products}/scrap-outputs-s3/los-data/reg_1.npz")
 
 
     PaperPlots.figure_3_total_and_jets(imgs[0], mask, jet_mask=jet_mask,
@@ -1401,6 +1641,16 @@ def run_paper_mill():
         f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
         f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
         f"{mask_dir}/true_mask.fits")
+
+    PaperPlots.figure_12_13_rm_lobes_histogram_rick(
+        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+        f"{mask_dir}/true_mask.fits",
+        f"{spectest}/from_rick/4k-proj/band-l-and-c-LCPIC-10.RM10.2.FITS-projected.fits",
+        f"{mask_dir}/rick-east-rm2.fits",
+        f"{mask_dir}/rick-west-rm2.fits",)
+
 
     PaperPlots.figure_rm_map(imgs[0], rm_map, mask, start=0.004, smooth_sigma=1)
     

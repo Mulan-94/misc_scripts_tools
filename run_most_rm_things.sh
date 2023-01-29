@@ -15,6 +15,12 @@ checkScriptsExist(){
         ln -s $HOME/git_repos/misc_scripts_n_tools/fits_related/plotting_bmaj_bmin.py
     fi
 
+    if [[ ! -f simple-mask.py ]]
+    then
+        echo "simple-mask.py FILE does not exist. Creating"
+        ln -s $HOME/git_repos/misc_scripts_n_tools/fits_related/simple-mask.py
+    fi
+
     if [[ ! -d qu_pol ]]
     then
         echo "qu_pol DIR does not exist. Creating"
@@ -364,6 +370,18 @@ generateSpiMap(){
     return 0
 }
 
+makeLobeMasks(){
+    # Make masks for my lobes
+    # We exclude the hotspots and the core for this
+    # -rb: regions for which to find the masks
+    # -er: regions to exclude from the mask
+
+    python simple-mask.py i-mfs.fits \
+        -o $mask_dir/lobes.fits east-lobe.fits west-lobe.fits \
+        -above 4e-3 \
+        -rb $mask_dir/important_regions/lobes/2023-lobes.reg $mask_dir/important_regions/lobes/e-lobe.reg $mask_dir/important_regions/lobes/w-lobe.reg \
+        -er $mask_dir/important_regions/hotspots/all-bright.reg
+}
 
 makeLobeCubes(){
     echo -e "\n############################################################"
@@ -436,6 +454,7 @@ main(){
 
     generateRmMap
     generateSpiMap
+    makeLobeMasks
     makeLobeCubes
     makePlotsforPaper
 
@@ -451,8 +470,7 @@ testing(){
     initialiseMaskDir $1
 
     # # running the high snr stuff
-    # # runScrappy 800 3 $scout-hi-snr false
-    makePlotsforPaper
+    runScrappy 800 3 $scout-hi-SNR false
 
     return 0
 }

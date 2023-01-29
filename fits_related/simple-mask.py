@@ -80,25 +80,50 @@ def merotate2(img, angle, pivot):
     rotated = rotate(paded, angle, reshape=False, output="uint8")
     return rotated[pady[0]:-pady[1], padx[0]:-padx[1]]
 
+def gen_reg_mask(reg, wcs, shape):
+    """
+    reg: Region
+        Region being worked on
+    wcs:
+        Wcs info for transformation
+    shape: tuple
+        Shape of the resulting image
+    """
+    reg = reg.to_pixel(wcs)
+    mask = reg.to_mask()
+    mask = mask.to_image(shape)
+    return mask.astype("uint8")
 
-def cumulate_regions(fname, data, reg):
-    buffer = np.zeros(data.shape)
 
-    # todo: Add support for other types of regions
+
+def cumulate_regions(fname, data, reg, fill_val=1, default_arr="zeros"):
+    """
+    fname: str
+        Name of the input image. To be used for wcs reference
+    data: np.ndarray
+        Numpy array containining image data
+    reg: :obj:`Regions`
+        Region being currently processed
+    fill_value: int
+        What to the chosen valid region area with. Default is 1. Meaning that
+        within the bounds of this region, the value there will be 1.
+    default_arr: str
+        What the buffering array will be composed of. Intention is to be:
+        'zeros' of 'ones' and nothing else! 
+    """
+    buffer = getattr(np, default_arr)(data.shape, dtype="uint8")
+
     if not hasattr(reg, "center"):
         print("This region has no center, skipping")
         return buffer
 
-    cx, cy = world_to_pixel_coords(reg.center.ra, reg.center.dec, wcs_ref=fname)
-    x_npix, y_npix = data.shape
-    w,h = None, None
-    
-    if isinstance(reg, CircleSkyRegion):
-        w, h = [int(reg.radius.value)]*2
-    elif isinstance(reg, RectangleSkyRegion):
+    if isinstance(reg, RectangleSkyRegion):
+        # using a custom masker for rectangular regions because it gives
+        # better results!!! Do NOT change!
+        cx, cy = world_to_pixel_coords(reg.center.ra, reg.center.dec,
+            wcs_ref=fname)
+        x_npix, y_npix = data.shape
         w, h = int(reg.width.value)//2, int(reg.height.value)//2
-    
-    if w is not None:
         minx, maxx = cx-w, cx+w
         miny, maxy = cy-h, cy+h
 
@@ -108,14 +133,18 @@ def cumulate_regions(fname, data, reg):
         # notice how we pass y before x, returns x before y
         # Leave it this way!!!!
         mesh = tuple(np.meshgrid(ys, xs))
-        buffer[mesh] = 1
+        buffer[mesh] = fill_val
         
         if hasattr(reg, "angle"):
             pivot = cx, cy
-            buffer = merotate2(buffer, -reg.angle.value, pivot=pivot)        
+            buffer = merotate2(buffer, -reg.angle.value, pivot=pivot)
+    else:
+        wcs = get_wcs(fname)
+        buffer = gen_reg_mask(reg, wcs, data.shape)
+
     return buffer
 
-def make_mask(fname, outname, above=None, below=None, regname=None):
+def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=None):
     """
     Make simple mask
 
@@ -147,22 +176,44 @@ def make_mask(fname, outname, above=None, below=None, regname=None):
 
     if regname is not None:
       
-        finale = np.zeros(data.shape)
+        finale = np.zeros(data.shape, dtype="uint8")
         regs = Regions.read(regname, format="ds9")
 
         for reg in regs:
-            finale += cumulate_regions(fname, data, reg)
-
+            # finale = finale+ cumulate_regions(fname, data, reg)
+            finale = np.bitwise_or(finale, cumulate_regions(fname, data, reg))
 
         if finale.sum() == 0:
             print("Invalid region(s). We're ignoring this")
         else:
             mask = finale * mask
-        plt.imshow(finale + mask, origin="lower")
-        ylim, xlim = np.where(mask+finale == 1)
-        plt.xlim(np.min(xlim), np.max(xlim))
-        plt.ylim(np.min(ylim), np.max(ylim))
-        plt.savefig(outname+"-overlay.png")
+            plt.imshow(finale + mask, origin="lower")
+            ylim, xlim = np.where(mask+finale == 1)
+            plt.xlim(np.min(xlim), np.max(xlim))
+            plt.ylim(np.min(ylim), np.max(ylim))
+            plt.savefig(outname+"-overlay.png")
+
+    if ex_regname is not None:
+        finale = np.zeros(data.shape, dtype="uint8")
+        regs = Regions.read(ex_regname, format="ds9")
+
+        for reg in regs:
+            finale = np.bitwise_or(finale, cumulate_regions(fname, data, reg))
+
+        # invert this mask to contain 1s where
+        finale = np.logical_not(finale).astype("uint8")
+
+        if finale.sum() == 0:
+            print("Invalid region(s). We're ignoring this")
+        else:
+            mask = finale * mask
+
+            plt.imshow(finale+mask, origin="lower")
+            ylim, xlim = np.where(mask*finale == 1)
+            plt.xlim(np.min(xlim), np.max(xlim))
+            plt.ylim(np.min(ylim), np.max(ylim))
+            plt.savefig(outname+"-overlay-2sub.png")
+
 
     outname += ".mask.fits" if ".fits" not in outname else ""
 
@@ -188,6 +239,9 @@ def parser():
     parse.add_argument("-rb", "--region-bound", dest="regname", default=[],
         metavar="", type=str, nargs="+",
         help="DS9 region file(s) within which to make our mask")
+    parse.add_argument("-er", "--exclude-region", dest="ex_regname", default=None,
+        metavar="", type=str,
+        help="DS9 region file(s) containing the regions that should be excluded")
     return parse
 
 
@@ -198,7 +252,7 @@ def main():
         if oname is None:
             oname = f"output-mask-{i}.fits"
         make_mask(opts.iname, oname, above=opts.above, below=opts.below,
-            regname=regname)
+            regname=regname, ex_regname=opts.ex_regname)
     print('------- Done ------')
 
 if __name__ == "__main__":
@@ -209,5 +263,8 @@ if __name__ == "__main__":
     python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o east-lobe.fits -above 4e-3 -rb important_regions/lobes/e-lobe.reg
 
     python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o west-lobe.fits -above 4e-3 -rb important_regions/lobes/w-lobe.reg
+
+    # with region exclusions
+    python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o test.fits -above 4e-3 -rb important_regions/lobes/2023-lobes.reg -er important_regions/hotspots/core.reg
 
     """
