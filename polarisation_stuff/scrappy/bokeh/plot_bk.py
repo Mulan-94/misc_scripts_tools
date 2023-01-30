@@ -3,6 +3,8 @@ import json
 import yaml
 import numpy as np
 from argparse import ArgumentParser
+from concurrent import futures
+from functools import partial
 
 from glob import glob
 from bokeh.io import save, output_file
@@ -228,6 +230,49 @@ python plot_bk.py -id IQU-regions-mpc-20-circle-sel-0.05 IQU-regions-mpc-20-corr
         help="Where to dump outputs")
     return parser
 
+def ragavi(los, i_dir, yaml_plots, o_dir):
+    """
+    An ode to my first s/w child :)
+    """
+    print(f"LOS: {los}")
+    reg = os.path.splitext(os.path.basename(los))[0]
+    depth_dir = os.path.join(os.path.dirname(i_dir), "los-rm-data")
+
+    # read line of sight data wavelengths
+    los_data = read_data(los)
+
+    grps = {"grp1": [], "grp2": []}
+    
+    pol_data = generate_data(los_data)
+    
+    # read los data for depths
+    try:
+        pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
+    except FileNotFoundError:
+        print(f"Depth File for {reg} not found")
+        return
+
+    for plot, plot_params in yaml_plots.items():
+
+        sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
+        if plot in ["fpol", "angle", "stokes", "lpol"]:
+            grps["grp1"].append(sub)
+        else:
+            grps["grp2"].append(sub)
+
+    outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
+                    ncols=len(grps) if grps["grp2"] else 1,
+                    sizing_mode="stretch_both", toolbar_location="left")
+    
+    #change to .json if you want a json output
+    o_file =os.path.join(o_dir, reg.replace("_", "") + ".html")
+    print(f"Writing {o_file}")
+
+    write_data(model=outp, name=reg, o_file=o_file)
+    print("Done")
+    return
+
+
 if __name__ == "__main__":
 
     opts = arg_parser().parse_args()
@@ -240,48 +285,19 @@ if __name__ == "__main__":
             files = glob(f"{i_dir}/*npz")
             if len(files) == 0:
                 print("No LOS files found, skipping.")
-            # for each LOS, read its data and plot it
-            for los in files:
-                print(f"LOS: {los}")
-                reg = os.path.splitext(os.path.basename(los))[0]
-                depth_dir = os.path.join(os.path.dirname(i_dir), "los-rm-data")
+                # i.e skip to the next item in the loop
+                continue
+            else:
+                print(F"Found {len(files)} files")
+            if opts.odir is not None:
+                o_dir = opts.odir
+            else:
+                o_dir = i_dir + "-plots"
+            if not os.path.isdir(o_dir):
+                os.mkdir(o_dir)
 
-                # read line of sight data wavelengths
-                los_data = read_data(los)
-
-                grps = {"grp1": [], "grp2": []}
-               
-                pol_data = generate_data(los_data)
-                
-                # read los data for depths
-                try:
-                    pol_data.update(read_data(os.path.join(depth_dir, f"{reg}.npz")))
-                except FileNotFoundError:
-                    print(f"Depth File for {reg} not found")
-                    continue
-
-                for plot, plot_params in yaml_plots.items():
-        
-                    sub = Panel(child=make_plot(pol_data, plot, plot_params), title=plot_params["title"])
-                    if plot in ["fpol", "angle", "stokes", "lpol"]:
-                        grps["grp1"].append(sub)
-                    else:
-                        grps["grp2"].append(sub)
-
-                outp = gridplot(children=[Tabs(tabs=grp) for _, grp in grps.items()],
-                                ncols=len(grps) if grps["grp2"] else 1,
-                                sizing_mode="stretch_both", toolbar_location="left")
-                
-                #change to .json if you want a json output
-                if opts.odir is not None:
-                    o_dir = opts.odir
-                else:
-                    o_dir = i_dir + "-plots"
-                if not os.path.isdir(o_dir):
-                    os.mkdir(o_dir)
-                o_file =os.path.join(o_dir, reg.replace("_", "") + ".html")
-                print(f"Writing {o_file}")
-
-                write_data(model=outp, name=reg, o_file=o_file)
-                print("Done")
-        
+            with futures.ProcessPoolExecutor(max_workers=16) as executor:
+                res = list(executor.map(
+                    partial(ragavi, i_dir=i_dir, yaml_plots=yaml_plots,
+                            o_dir=o_dir),
+                    files))

@@ -143,7 +143,7 @@ def parser():
         """
     )
     losopts.add_argument("-psnr", "--use-polzd-snr", action="store_true",
-        dest="polzd_snr", metavar="",
+        dest="polzd_snr",
         help="""Use to elect use of polarised SNR to determine valid LoS. 
         Default S/N used is total intensity: rms noise""")
 
