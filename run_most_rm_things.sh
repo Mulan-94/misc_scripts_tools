@@ -370,7 +370,21 @@ generateSpiMap(){
     return 0
 }
 
-makeLobeMasks(){
+makeMasks(){
+    # Run this function to create masks
+    # arg1: float
+    #   name: above
+    #   Include everything above this value in the mask. Default is 0.004
+
+    local above=$([ ! -z "$1" ] && echo $1 || echo 4e-3)
+
+    # Make mask for pictor A source
+    python simple-mask.py i-mfs.fits \
+        -o $mask_dir/pica-mask.fits \
+        -above $above \
+        -rb $mask_dir/important_regions/pica_region-for-mask.reg
+
+
     # Make masks for my lobes
     # We exclude the hotspots and the core for this
     # -rb: regions for which to find the masks
@@ -390,9 +404,9 @@ makeLobeCubes(){
 
 
     fitstool.py --prod $conv_cubes/i-conv-image-cube.fits $mask_dir/east-lobe.fits \
-        -o ./$prods/east-lobe-cube.fits
+        -o ./$prods/east-lobe-cube.fits -f
     fitstool.py --prod $conv_cubes/i-conv-image-cube.fits $mask_dir/west-lobe.fits \
-        -o ./$prods/west-lobe-cube.fits
+        -o ./$prods/west-lobe-cube.fits -f
 
     return 0
 }
@@ -442,6 +456,9 @@ main(){
     initialiseMaskDir $1
     
     makeDirs
+
+    # make mask for pictor a and the lobes
+    makeMasks
     
     copyAndStackRequiredImages
     generateUsefulFiles
@@ -454,7 +471,6 @@ main(){
 
     generateRmMap
     generateSpiMap
-    makeLobeMasks
     makeLobeCubes
     makePlotsforPaper
 
@@ -470,7 +486,10 @@ testing(){
     initialiseMaskDir $1
 
     # # running the high snr stuff
-    runScrappy 800 3 $scout-hi-SNR false
+    # runScrappy 800 3 $scout-hi-SNR false
+
+    makeLobeCubes
+    makePlotsforPaper
 
     return 0
 }

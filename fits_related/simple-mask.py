@@ -9,9 +9,9 @@ from astropy.coordinates import SkyCoord, FK5
 from astropy.wcs import WCS
 from scipy.ndimage import rotate
 
-from regions import (Regions, CircleSkyRegion, RectangleSkyRegion)
+from regions import (Regions, LineSkyRegion, RectangleSkyRegion)
 # CircleAnnulusSkyRegion, EllipseSkyRegion, EllipseAnnulusSkyRegion
-# LineSkyRegion, PolygonSkyRegion, PointSkyRegion, 
+# , PolygonSkyRegion, PointSkyRegion, 
 # RectangleAnnulusSkyRegion, RectangleAnnulusSkyRegion
 
 
@@ -113,8 +113,8 @@ def cumulate_regions(fname, data, reg, fill_val=1, default_arr="zeros"):
     """
     buffer = getattr(np, default_arr)(data.shape, dtype="uint8")
 
-    if not hasattr(reg, "center"):
-        print("This region has no center, skipping")
+    if isinstance(reg, LineSkyRegion):
+        print("We don't do lines here :), skipping")
         return buffer
 
     if isinstance(reg, RectangleSkyRegion):
@@ -166,6 +166,9 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
     hdr = fits.getheader(fname)
     del hdr["HISTORY"]
 
+    # cater for empty masks
+    data = np.ma.masked_array(data=data, mask=np.ma.make_mask(data))
+
     if above is not None:
         data = np.ma.masked_greater(data, above)
     if below is not None:
@@ -187,11 +190,11 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
             print("Invalid region(s). We're ignoring this")
         else:
             mask = finale * mask
-            plt.imshow(finale + mask, origin="lower")
-            ylim, xlim = np.where(mask+finale == 1)
-            plt.xlim(np.min(xlim), np.max(xlim))
-            plt.ylim(np.min(ylim), np.max(ylim))
-            plt.savefig(outname+"-overlay.png")
+        plt.imshow(finale + mask, origin="lower")
+        ylim, xlim = np.where(mask+finale >= 1)
+        plt.xlim(np.min(xlim), np.max(xlim))
+        plt.ylim(np.min(ylim), np.max(ylim))
+        plt.savefig(outname+"-overlay.png")
 
     if ex_regname is not None:
         finale = np.zeros(data.shape, dtype="uint8")
@@ -208,12 +211,11 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
         else:
             mask = finale * mask
 
-            plt.imshow(finale+mask, origin="lower")
-            ylim, xlim = np.where(mask*finale == 1)
-            plt.xlim(np.min(xlim), np.max(xlim))
-            plt.ylim(np.min(ylim), np.max(ylim))
-            plt.savefig(outname+"-overlay-2sub.png")
-
+    plt.imshow(mask, origin="lower")
+    ylim, xlim = np.where(mask >= 1)
+    plt.xlim(np.min(xlim), np.max(xlim))
+    plt.ylim(np.min(ylim), np.max(ylim))
+    plt.savefig(outname+"-overlay-final.png")
 
     outname += ".mask.fits" if ".fits" not in outname else ""
 
@@ -232,10 +234,10 @@ def parser():
         help="Where to dump the output(s). We can iterate over multiple reg files. See '-rb' ")
     parse.add_argument("-above", "--above", dest="above", default=None,
         metavar="", type=float,
-        help="Valuse above which to mask")
+        help="Include everything above this value. ie. > above. Aka the lower limit")
     parse.add_argument("-below", "--below", dest="below", default=None,
         metavar="", type=float,
-        help="Values below which to mask")
+        help="Include everything below this value. i.e < below. Aka the upper limit")
     parse.add_argument("-rb", "--region-bound", dest="regname", default=[],
         metavar="", type=str, nargs="+",
         help="DS9 region file(s) within which to make our mask")
