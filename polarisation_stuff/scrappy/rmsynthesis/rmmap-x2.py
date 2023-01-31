@@ -238,7 +238,7 @@ def arg_parser():
     add('-f', '--freq', dest='freq', help='Frequency file (text)')  
 
     add('-ncore', '--ncore', dest='numProcessor',
-        help='number of cores to use. Default 60.', default=60, type=int)
+        help='number of cores to use. Default 60.', default=20, type=int)
     add('-mask', '--maskfits', dest='maskfits',
         help='A mask image (fits)', default=None)
     add('-o', '--prefix', dest='prefix', help='This is a prefix for output files.')

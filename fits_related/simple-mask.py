@@ -123,9 +123,11 @@ def cumulate_regions(fname, data, reg, fill_val=1, default_arr="zeros"):
         cx, cy = world_to_pixel_coords(reg.center.ra, reg.center.dec,
             wcs_ref=fname)
         x_npix, y_npix = data.shape
-        w, h = int(reg.width.value)//2, int(reg.height.value)//2
-        minx, maxx = cx-w, cx+w
-        miny, maxy = cy-h, cy+h
+        
+        w, h = np.ceil(np.array((reg.width.value, reg.height.value))//2).astype(int)
+        
+        minx, maxx = cx-w, cx+w+1
+        miny, maxy = cy-h, cy+h+1
 
         xs = np.ma.masked_outside(np.arange(minx, maxx), 0, x_npix).compressed()
         ys = np.ma.masked_outside(np.arange(miny, maxy), 0, y_npix).compressed()
@@ -167,12 +169,14 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
     del hdr["HISTORY"]
 
     # cater for empty masks
-    data = np.ma.masked_array(data=data, mask=np.ma.make_mask(data))
 
     if above is not None:
         data = np.ma.masked_greater(data, above)
     if below is not None:
         data = np.ma.masked_less(data, below)
+    if None not in [above, below]:
+        data = np.ma.masked_array(data=data, mask=np.ma.make_mask(data))
+
     
     mask = data.mask
     mask = mask.astype("uint8")
@@ -190,11 +194,11 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
             print("Invalid region(s). We're ignoring this")
         else:
             mask = finale * mask
-        plt.imshow(finale + mask, origin="lower")
-        ylim, xlim = np.where(mask+finale >= 1)
-        plt.xlim(np.min(xlim), np.max(xlim))
-        plt.ylim(np.min(ylim), np.max(ylim))
-        plt.savefig(outname+"-overlay.png")
+        # plt.imshow(finale + mask, origin="lower")
+        # ylim, xlim = np.where(mask+finale >= 1)
+        # plt.xlim(np.min(xlim), np.max(xlim))
+        # plt.ylim(np.min(ylim), np.max(ylim))
+        # plt.savefig(outname+"-overlay.png")
 
     if ex_regname is not None:
         finale = np.zeros(data.shape, dtype="uint8")

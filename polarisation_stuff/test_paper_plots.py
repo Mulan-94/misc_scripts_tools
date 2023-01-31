@@ -102,6 +102,7 @@ ROT = 90
 ANGLE_OFFSET = 90
 
 # Where we are dumping the output
+global PFIGS
 PFIGS = "paper-figs"
 
 plt.style.use("seaborn")
@@ -1702,23 +1703,23 @@ def parser():
     ps = argparse.ArgumentParser(
         usage="%(prog)s [options]",
         description="Script to genernetae some plots for my paper")
-    ps.add_argument("-rim", "--ref-i-image", dest="ref_image", 
-        help="Reference I image for the contour plots")
-    ps.add_argument("--cube-name", dest="cube_names", nargs="+",
-        help="Input I q AND U same resolution cubes")
-    ps.add_argument("--input-maps", dest="prefix", 
-        required=True,
-        help="Input prefix for the fpol rm and whatever maps")
-    ps.add_argument("--mask-name", dest="mask_name",
-        help="Name of the full field mask to use"
-        )
-    ps.add_argument("-elm", "--e-lobe-mask", dest="elobe_mask",
-        help="Mask for the eastern lobe"
-        )
-    ps.add_argument("-wlm", "--w-lobe-mask", dest="wlobe_mask",
-        help="Mask for the western lobe"
-        )
-    ps.add_argument("-o", "-output-dir", dest="output_dir",
+    # ps.add_argument("-rim", "--ref-i-image", dest="ref_image", 
+    #     help="Reference I image for the contour plots")
+    # ps.add_argument("--cube-name", dest="cube_names", nargs="+",
+    #     help="Input I q AND U same resolution cubes")
+    # ps.add_argument("--input-maps", dest="prefix", 
+    #     required=True,
+    #     help="Input prefix for the fpol rm and whatever maps")
+    # ps.add_argument("--mask-name", dest="mask_name",
+    #     help="Name of the full field mask to use"
+    #     )
+    # ps.add_argument("-elm", "--e-lobe-mask", dest="elobe_mask",
+    #     help="Mask for the eastern lobe"
+    #     )
+    # ps.add_argument("-wlm", "--w-lobe-mask", dest="wlobe_mask",
+    #     help="Mask for the western lobe"
+    #     )
+    ps.add_argument("-o", "-output-dir", dest="output_dir", default=None,
         help="Where to dump the outputs"
         )
     return ps
@@ -1728,6 +1729,9 @@ def parser():
 ######################################################################################
 
 if __name__ == "__main__":
+    opts = parser().parse_args()
+    if opts.output_dir is not None:
+        PFIGS = opts.output_dir
 
     run_paper_mill()
     # fixer()

@@ -113,3 +113,15 @@ python qu_pol/scrappy/rmsynthesis/fit-qu-cube-random-x2.py \
     -rm $prods/initial-RM-depth-at-peak-rm.fits \
     -fp $prods/initial-FPOL-at-max-lpol.fits \
     -ldf $scout-s3/los-data/reg_1.npz
+
+
+
+####### mAKE A MASK FOR THE PROBLEMATIC RMs
+python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o problematic-rm.fits -above 4e-3 -rb important_regions/rm-problematic.reg
+
+
+## make a 4 and 6 mjy mask
+
+python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o pica-6mjy-mask.fits -above 6e-3 -rb important_regions/pica_region-for-mask.reg 
+
+python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o pica-4mjy-mask.fits -above 4e-3 -rb important_regions/pica_region-for-mask.reg 
