@@ -294,14 +294,14 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
     return valid_regs_file
 
 
-def step1_default_regions(reg_size, wcs_ref, x_range, y_range, threshold=1, rnoise=None):
+def step1_default_regions(reg_size, wcs_ref, bounds, threshold=1, rnoise=None):
     # Step 1. Make the default regions, ie within the source dimensions
     # we establish the sources bounds here, no parsing involved
     global RDIR, CURRENT_RFILE, NRFILE
 
     RDIR = make_out_dir(RDIR)
 
-    CURRENT_RFILE = make_default_regions(*x_range, *y_range, reg_size,
+    CURRENT_RFILE = make_default_regions(bounds, reg_size,
                         wcs_ref, RFILE, overwrite=OVERWRITE)
 
     NRFILE = make_noise_region_file(name=NRFILE, reg_xy=None)
@@ -399,19 +399,23 @@ def main():
     else:
         rnoise = None
 
-    if opts.x_range is None:
-        # left to right: ra in degrees
-        pictor_x = (80.04166306500294, 79.84454319889994)
-        x_range = pictor_x
+    if opts.mask is not None:
+        bounds = opts.mask
     else:
-        x_range = opts.x_range
+        if opts.x_range is None:
+            # left to right: ra in degrees
+            pictor_x = (80.04166306500294, 79.84454319889994)
+            x_range = pictor_x
+        else:
+            x_range = opts.x_range
 
-    if opts.y_range is None:
-        #  bottom to top dec in degrees
-        pictor_y = (-45.81799666164118, -45.73325018138195)
-        y_range = pictor_y
-    else:
-        y_range = opts.y_range
+        if opts.y_range is None:
+            #  bottom to top dec in degrees
+            pictor_y = (-45.81799666164118, -45.73325018138195)
+            y_range = pictor_y
+        else:
+            y_range = opts.y_range
+        bounds = [*x_range, *y_range]
 
     if opts.noise_ref is None:
         noise_ref = opts.noise_ref
@@ -432,7 +436,7 @@ def main():
     # For regions
     if opts.regions_only or "r" in todo:
 
-        step1_default_regions(reg_size, wcs_ref, x_range, y_range,
+        step1_default_regions(reg_size, wcs_ref, bounds,
             threshold=threshold, rnoise=rnoise)
         step2_valid_reg_canidates(wcs_ref, noise_ref, threshold, rnoise=rnoise)
     

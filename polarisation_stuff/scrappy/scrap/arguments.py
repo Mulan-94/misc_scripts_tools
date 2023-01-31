@@ -121,6 +121,11 @@ def parser():
         type=float, nargs=2, default=None,
         help="""Space separated list containing DEC in degrees within which 
         to generate regions""")
+    regopts.add_argument("-m", "--mask", dest="mask", metavar="",
+        type=str, default=None,
+        help="""Mask containing the area where LoS should be restricted.
+        This will supercede -xr and -yr options. They are mutually exclusive.
+        """)
 
 
 

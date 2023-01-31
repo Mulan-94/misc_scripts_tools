@@ -47,7 +47,8 @@ def read_fits_image(name: str, mask=None, numpy=True):
     image.freq = image.header["CRVAL3"]
     image.chan_width = image.header["CDELT3"]
 
-    del image.header["HISTORY"]
+    if "HISTORY" in image.header:
+        del image.header["HISTORY"]
 
     try:
         # testing if this value is an integer to trigger error
@@ -166,7 +167,12 @@ def write_regions(name: str, regs: tuple, overwrite=True, reg_id=False):
     return os.path.splitext(name)[0]
 
 
-def make_default_regions(minx, maxx, miny, maxy, size, wcs_ref, reg_file,
+def sorta(inp):
+    val, ind = np.unique(inp, return_index=True)
+    val = val[np.argsort(ind)]
+    return val
+
+def make_default_regions(bounds, size, wcs_ref, reg_file,
     pixels=False, overwrite=True):
     """
     Create some default regions given an image
@@ -183,10 +189,11 @@ def make_default_regions(minx, maxx, miny, maxy, size, wcs_ref, reg_file,
 
     Inputs
     ------
-    min(x|y): float
-        Minimum x and y coordinate
-    max(x|y): float
-        Maximum x and y coordinates
+    bounds: tuple | str
+        minx, maxx, miny, maxy
+        (min|max)(x|y): float
+            Minimum|maximum x and y coordinate
+        If its a string, assume its a mask name and read the mask properly
     size: int
         The desired region size
     image:
@@ -212,20 +219,39 @@ def make_default_regions(minx, maxx, miny, maxy, size, wcs_ref, reg_file,
         else:
             return True
     
-    # get the maximum x and y image dimensions possible
-    maxx_dim, maxy_dim = get_wcs(wcs_ref, pixels=True)
+    
     wcs = get_wcs(wcs_ref)
-    minx, miny = world_to_pixel_coords(minx, miny, wcs)
-    maxx, maxy = world_to_pixel_coords(maxx, maxy, wcs)
+
+    snitch.info("Making default regions")    
+
+    if isinstance(bounds, str):
+        # reading this as an image because I want the valid areas
+        mask = read_fits_image(bounds).data
+        mycoords, mxcoords = np.where(mask>0)
+        mcords = list(zip(mycoords, mxcoords))
+        minx, maxx = mxcoords.min(), mxcoords.max()
+        miny, maxy = mycoords.min(), mycoords.max()
+        maxx_dim, maxy_dim = maxx, maxy
+    else:
+        # get the maximum x and y image dimensions possible
+        minx, maxx, miny, maxy = bounds
+        maxx_dim, maxy_dim = get_wcs(wcs_ref, pixels=True)
+        minx, miny = world_to_pixel_coords(minx, miny, wcs)
+        maxx, maxy = world_to_pixel_coords(maxx, maxy, wcs)
 
     xcoords = [_ for _ in range(minx, maxx, size*2) 
                 if is_valid_coord(size, _, maxx_dim)]
     ycoords = [_ for _ in range(miny, maxy, size*2) 
                 if is_valid_coord(size, _, maxy_dim)]
+    
+    cords = product(ycoords, xcoords)
 
     world_coords = []
 
-    for count, (y, x) in enumerate(product(ycoords, xcoords)):
+    for count, (y, x) in enumerate(cords):
+        if isinstance(bounds, str):
+            if (y,x) not in mcords:
+                continue
         sky = CirclePixelRegion(
             PixCoord(x, y), radius=size).to_sky(wcs)
 
@@ -233,7 +259,8 @@ def make_default_regions(minx, maxx, miny, maxy, size, wcs_ref, reg_file,
             "circle({:.6f}, {:.6f}, {:.6f}\") # text={{reg_{}}}".format(
         sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, count)
         )
-
+    
+    snitch.info(f"{len(world_coords)} regions found")
     # Write the regions out
     reg_file += f"-size-{size}-default"
     reg_file = write_regions(reg_file+".reg", world_coords, overwrite=overwrite)
