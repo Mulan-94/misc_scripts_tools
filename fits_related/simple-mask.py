@@ -7,11 +7,12 @@ from itertools import zip_longest
 from astropy.io import fits
 from astropy.coordinates import SkyCoord, FK5
 from astropy.wcs import WCS
-from scipy.ndimage import rotate
+from scipy.ndimage import rotate, label
 
 from regions import (Regions, LineSkyRegion, RectangleSkyRegion)
 
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 from ipdb import set_trace
 # from scrappy
@@ -211,10 +212,22 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
         else:
             mask = finale * mask
 
-    plt.imshow(mask, origin="lower")
+    mask_, fts = label(mask)
+
+   
+    cmap = plt.get_cmap('viridis', fts)
+    plt.figure()
+    ax = plt.gca()
+    cs = ax.imshow(mask_, origin="lower", cmap=cmap, vmin=1, vmax=fts)
     ylim, xlim = np.where(mask >= 1)
     plt.xlim(np.min(xlim), np.max(xlim))
     plt.ylim(np.min(ylim), np.max(ylim))
+
+    divider = make_axes_locatable(ax)
+    cax = divider.append_axes("right", size="5%", pad=0.05)
+    plt.colorbar(cs, cax=cax, label="Tag number")
+    
+    plt.tight_layout()
     plt.savefig(outname+"-overlay-final.png")
 
     outname += ".mask.fits" if ".fits" not in outname else ""

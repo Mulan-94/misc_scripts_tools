@@ -117,7 +117,7 @@ python qu_pol/scrappy/rmsynthesis/fit-qu-cube-random-x2.py \
 
 
 ####### mAKE A MASK FOR THE PROBLEMATIC RMs
-python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o problematic-rm.fits -above 4e-3 -rb important_regions/rm-problematic.reg
+python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o problematic-rm2.fits -above 4e-3 -rb important_regions/rm-problematic.reg
 
 
 ## make a 4 and 6 mjy mask
