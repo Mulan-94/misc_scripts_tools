@@ -10,10 +10,6 @@ from astropy.wcs import WCS
 from scipy.ndimage import rotate
 
 from regions import (Regions, LineSkyRegion, RectangleSkyRegion)
-# CircleAnnulusSkyRegion, EllipseSkyRegion, EllipseAnnulusSkyRegion
-# , PolygonSkyRegion, PointSkyRegion, 
-# RectangleAnnulusSkyRegion, RectangleAnnulusSkyRegion
-
 
 import matplotlib.pyplot as plt
 
@@ -224,6 +220,7 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
     outname += ".mask.fits" if ".fits" not in outname else ""
 
     print(f"Writing output mask into {outname}")
+    # del hdr["BUNIT"]
     fits.writeto(outname, mask, header=hdr, overwrite=True)
 
     return

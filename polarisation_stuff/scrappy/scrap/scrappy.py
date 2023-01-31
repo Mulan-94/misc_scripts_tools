@@ -253,7 +253,7 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
         # sds = make_syncd_data_stores(len(images), syncd=False) 
         # for chan, triplet in enumerate(images):
         #     results.append(parse_valid_fpol_region_per_region(triplet,
-        #             cidx=chan, reg=reg,
+        #             cidx=chan, reg=reg, global_noise=global_noise,
         #             noise_reg=noise_reg, threshold=threshold))
 
         ##################################################################
@@ -270,13 +270,15 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
             snitch.warning(f"{reg.meta['text']}: flagged {n_masked}/{n_chans} points")
         
             outfile = fullpath(LOS_DIR, f"reg_{count}")
+            sds["tag"] = ','.join(reg.meta["tag"])
             np.savez(outfile, **sds)
             count += 1
 
             sky = reg.to_sky(wcs)
             valid_regions.append(
-                "circle({:.6f}, {:.6f}, {:.6f}\")".format(
-                    sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec))
+                "circle({:.6f}, {:.6f}, {:.6f}\") # tag={{{}}}".format(
+                    sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec,
+                    ','.join(reg.meta["tag"])))
         else:
             snitch.warning(f"Skipping region {reg.meta['text']} because either:")
             snitch.warning("(1) Too much data was flagged, or not " +

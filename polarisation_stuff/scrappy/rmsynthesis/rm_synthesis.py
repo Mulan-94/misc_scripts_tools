@@ -324,6 +324,8 @@ def read_los_data(filename, compress=True):
     mask = losdata.pop("mask")
     if compress:
         for key, value in losdata.items():
+            if key.lower() == "tag":
+                continue
             # get only data that is not masked
             losdata[key] = np.ma.masked_array(
                 data=value, mask=mask).compressed()
@@ -354,7 +356,7 @@ def write_out_rmsynthesis_data(data, idir, depth, odir=None):
 def plot_los_rmdata(los, los_rm, losdata_fname):
     odir = os.path.dirname(losdata_fname) 
     odir = make_out_dir(odir+"-plots")
-    ofile = fullpath(odir, f"reg_{los.reg_num}.png")
+    ofile = fullpath(odir, f"reg_{los.reg_num}-{los.tag}.png")
 
     plt.close("all")
     fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
@@ -436,6 +438,7 @@ def rm_and_plot(data_dir, opts=None):
         phi_step=opts.depth_step, niter=opts.niters, clean=True)
     
     rmout["reg_num"] = los.reg_num
+    rmout["tag"] = los.tag or ""
     
     losdata_fname = write_out_rmsynthesis_data(rmout, idir=data_dir,
         depth=opts.max_fdepth, odir=opts.output_dir)

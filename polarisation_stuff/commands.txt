@@ -125,3 +125,9 @@ python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o problematic-rm.fits -abo
 python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o pica-6mjy-mask.fits -above 6e-3 -rb important_regions/pica_region-for-mask.reg 
 
 python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o pica-4mjy-mask.fits -above 4e-3 -rb important_regions/pica_region-for-mask.reg 
+
+
+
+##### Problematic RM AREAS
+python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir relevant-images --threshold 50 -odir testo -ref-image i-mfs.fits -nri i-mfs.fits -m $mask_dir/problematic-rm.fits
+

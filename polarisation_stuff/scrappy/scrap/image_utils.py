@@ -9,6 +9,7 @@ from collections import namedtuple
 from copy import deepcopy
 from itertools import product
 from regions import Regions, PixCoord, CirclePixelRegion, RectanglePixelRegion
+from scipy.ndimage import label, find_objects
 
 
 from scrap.scraplog import snitch
@@ -153,7 +154,8 @@ def write_regions(name: str, regs: tuple, overwrite=True, reg_id=False):
         with open(name, "w") as fil:
             for i, p in enumerate(regs, 1):
                 if reg_id:
-                    outs.append(p.split("#")[0] + f" # {i},los text={{reg_{i}}}\n")
+                    sub = p.split("#")
+                    outs.append(sub[0] + f" # {i},los text={{reg_{i}}} {sub[1].strip()}\n")
                 else:
                     outs.append(p+"\n")
             fil.writelines(header+outs)
@@ -227,6 +229,10 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
     if isinstance(bounds, str):
         # reading this as an image because I want the valid areas
         mask = read_fits_image(bounds).data
+       
+        # label the different regions for tag
+        label(mask, output=mask)
+
         mycoords, mxcoords = np.where(mask>0)
         mcords = list(zip(mycoords, mxcoords))
         minx, maxx = mxcoords.min(), mxcoords.max()
@@ -248,22 +254,26 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
 
     world_coords = []
 
-    for count, (y, x) in enumerate(cords):
+    for y, x in cords:
         if isinstance(bounds, str):
             if (y,x) not in mcords:
                 continue
-        sky = CirclePixelRegion(
-            PixCoord(x, y), radius=size).to_sky(wcs)
+            tag = f"g{mask[y,x]}"
+        else:
+            tag = "g1"
+            
+        sky = CirclePixelRegion(PixCoord(x, y), radius=size).to_sky(wcs)
 
         world_coords.append(
-            "circle({:.6f}, {:.6f}, {:.6f}\") # text={{reg_{}}}".format(
-        sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, count)
+            "circle({:.6f}, {:.6f}, {:.6f}\") # tag={{{}}}".format(
+        sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, tag)
         )
     
     snitch.info(f"{len(world_coords)} regions found")
     # Write the regions out
     reg_file += f"-size-{size}-default"
-    reg_file = write_regions(reg_file+".reg", world_coords, overwrite=overwrite)
+    reg_file = write_regions(reg_file+".reg", world_coords, overwrite=overwrite,
+        reg_id=True)
 
     return reg_file
 
@@ -358,19 +368,19 @@ def parse_valid_region_candidates(image, reg_file, noise_file, threshold,
         return
 
     valids = []
-    for _i, reg in enumerate(regs, 1):
+    for reg in regs:
         signal = region_flux_jybm(reg, image_data)
         if region_is_above_thresh(signal, noise, threshold=threshold):
-            # info.append(dict(flux_jybm=signal, noise=noise))
             sky = reg.to_sky(wcs)
             valids.append(
-            "circle({:.6f}, {:.6f}, {:.6f}\") # text={{reg_{}}}".format(
-            sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, _i))
+            "circle({:.6f}, {:.6f}, {:.6f}\") # tag={{{}}}".format(
+                sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec,
+                ','.join(reg.meta["tag"])))
 
     if len(valids) > 0:
         snitch.info(f"Found {len(valids)}/{len(regs)} valid region candidates")
         valid_name = os.path.splitext(reg_file)[0] + "-valid-candidates"
-        valid_name = write_regions(valid_name, valids, overwrite=overwrite)
+        valid_name = write_regions(valid_name, valids, overwrite=overwrite, reg_id=True)
     else:
         valid_name = None
         snitch.warning("No valid regions were found")
