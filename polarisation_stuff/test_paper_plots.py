@@ -102,7 +102,6 @@ ROT = 90
 ANGLE_OFFSET = 90
 
 # Where we are dumping the output
-global PFIGS
 PFIGS = "paper-figs"
 
 plt.style.use("seaborn")
@@ -135,7 +134,10 @@ class PaperPlots:
     @staticmethod
     def figure_3_total_and_jets(i_image, mask, jet_mask, start=0.004, vmin=0,
             vmax=None, scale="linear", cmap="magma",
-            output=f"{PFIGS}/3-total-intensity", kwargs=dict()):
+            output=None, kwargs=dict()):
+
+        if output is None:
+            output=f"{PFIGS}/3-total-intensity"
         
         plt.close("all")
         """
@@ -245,7 +247,7 @@ class PaperPlots:
     @staticmethod
     def figure_3b_chandra(i_image, mask, jet_mask, chandra=None, chandra_jet=None, 
         start=4e-8, smooth_sigma=1, vmin=0, vmax=2, scale="linear", cmap="magma",
-        output=f"{PFIGS}/chandra-3-total-intensity", kwargs=dict()):
+        output=None, kwargs=dict()):
         """
         i_image:
             The data without masking. Will be zoomed in anyway
@@ -255,6 +257,8 @@ class PaperPlots:
             Mask for this jet
         
         """
+        if output is None:
+            output=f"{PFIGS}/chandra-3-total-intensity"
 
         plt.close("all")
         scaling = {
@@ -338,7 +342,10 @@ class PaperPlots:
     
     @staticmethod
     def figure_4b_intensity_contours(i_image, mask, start=0.004, smooth_sigma=13,
-        output="{PFIGS}/4b-intensity-contours.png"):
+        output=None):
+
+        if output is None:
+            output=f"{PFIGS}/4b-intensity-contours.png"
 
         i_data = rfu.get_masked_data(i_image, mask)
         # # replace nans with zeroes. Remember in mask images, the NOT MAsked area is set to 1
@@ -382,7 +389,7 @@ class PaperPlots:
 
     
     @staticmethod
-    def table2_core_flux_wfreq(cube, region, output=f"{PFIGS}/2-table.png"):
+    def table2_core_flux_wfreq(cube, region, output=None):
         """
         Monitor Change in the flux of the core with frequency
 
@@ -401,6 +408,10 @@ class PaperPlots:
         # in this case axis 2 (the frequency axis)  
         """
         from casatasks import imstat
+        
+        if output is None:
+            output=f"{PFIGS}/2-table.png"
+
         stats = imstat(cube, region=region, axes=[0,1])
         flux = stats["flux"]
         mean = stats["mean"]
@@ -429,8 +440,7 @@ class PaperPlots:
 
     
     @staticmethod
-    def table3_lobe_flux_wfreq(elobe, wlobe,
-        output=f"{PFIGS}/3-table-lobe-fluxes.png", smooth_sigma=10):
+    def table3_lobe_flux_wfreq(elobe, wlobe, output=None, smooth_sigma=10):
         """
         Monitor change of lobes' flux with frequncy
         (e|w)lobe:
@@ -446,7 +456,9 @@ class PaperPlots:
         """
         from casatasks import imstat
 
-        
+        if output is None:
+            output=f"{PFIGS}/3-table-lobe-fluxes.png"
+
         estats = imstat(elobe, axes=[0,1], stretch=True)
         wstats = imstat(wlobe, axes=[0,1], stretch=True)
         
@@ -489,7 +501,7 @@ class PaperPlots:
     
     @staticmethod
     def figure_5b_spi_wintensity_contours(i_image, spi_image, mask, start=0.004,
-        smooth_sigma=13, output=f"{PFIGS}/5b-spi-intensity-contours.png"):
+        smooth_sigma=13, output=None):
         """
         i_image:
             The total intensity image
@@ -500,7 +512,9 @@ class PaperPlots:
         start:
             Where the contour levels should start
         """
-        
+        if output is None:
+            output=f"{PFIGS}/5b-spi-intensity-contours.png"
+
         i_data = rfu.get_masked_data(i_image, mask)
         spi_data = rfu.get_masked_data(spi_image, mask)
         mask = i_data.mask
@@ -546,12 +560,15 @@ class PaperPlots:
     @staticmethod
     def figure_8_dop_magnetic_fields_contours(i_image, fp_image, angle_image,
         mask, start=0.004, smooth_sigma=1,
-        output=f"{PFIGS}/8-dop-contours-mfs.png"):
+        output=None):
         """
         LINES SHOW DEGREE OF POLARIZATION HERE!
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
         """
+        if output is None:
+            output=f"{PFIGS}/8-dop-contours-mfs.png"
+
         if isinstance(i_image, str):
             i_data = rfu.get_masked_data(i_image, mask)
         else:
@@ -651,7 +668,7 @@ class PaperPlots:
     @staticmethod
     def figure_8b_dop_magnetic_fields_contours(i_image, fpol_image,
         angle_image, mask, start=0.004, smooth_sigma=1,
-        output=f"{PFIGS}/8b-dop-contours-mfs.png"):
+        output=None):
         """
         COLOUR MAP SHOWS FRACTIONA POLZN HERE!!
 
@@ -659,6 +676,9 @@ class PaperPlots:
         # Degree of polzn lines vs contours
         # we're not using cubes, we use the MFS images
         """
+
+        if output is None:
+            output = f"{PFIGS}/8b-dop-contours-mfs.png"
 
         if isinstance(i_image, str):
             i_data = rfu.get_masked_data(i_image, mask)
@@ -760,7 +780,7 @@ class PaperPlots:
 
     @staticmethod
     def figure_9a_fractional_poln(i_image, fp_image, mask, start=0.004,
-        smooth_sigma=1, output=f"{PFIGS}/9a-dop-mfs.png", vmax=1):
+        smooth_sigma=1, output=None, vmax=1):
         """
         # Degree of polzn lines without the contours
         This is determined from the FPOL map. 
@@ -770,6 +790,9 @@ class PaperPlots:
         and dividing that with the corresponding I image.
     
         """
+        if output is None:
+            output = f"{PFIGS}/9a-dop-mfs.png"
+
         plt.close("all")
         if isinstance(i_image, str):
             i_data = rfu.get_masked_data(i_image, mask)
@@ -842,11 +865,14 @@ class PaperPlots:
 
     @staticmethod
     def figure_10_linear_poln(i_image, lp_image, mask, start=0.004, smooth_sigma=1,
-        output=f"{PFIGS}/10-lpol-mfs.png"):
+        output=None):
         """
         NOTE THAT: The LPOL map was generated
         by using the channel which had the maximum polarised intensity per pixel.
         """
+
+        if output is None:
+            output = f"{PFIGS}/10-lpol-mfs.png"
 
         if isinstance(i_image, str):
             i_data = rfu.get_masked_data(i_image, mask)
@@ -911,11 +937,14 @@ class PaperPlots:
 
     @staticmethod
     def figure_rm_map(i_image, rm_map, mask, start=0.004, smooth_sigma=1,
-        output=f"{PFIGS}/rm-map.png"):
+        output=None):
         """
         Plot the RM-MAP
         Only where the total intensity is greater thab start
         """
+        if output is None:
+            output = f"{PFIGS}/rm-map.png"
+
         i_data = rfu.get_masked_data(i_image, mask)
 
         if isinstance(rm_map, str):
@@ -969,11 +998,14 @@ class PaperPlots:
 
     @staticmethod
     def figure_rm_map_b_with_mf(i_image, rm_map, angle_image, mask,
-        start=0.004, smooth_sigma=1, output=f"{PFIGS}/rm-map-wmf.png"):
+        start=0.004, smooth_sigma=1, output=None):
         """
         Plot the RM-MAP
         Only where the total intensity is greater thab start
         """
+        if output is None:
+            output = f"{PFIGS}/rm-map-wmf.png"
+
         i_data = rfu.get_masked_data(i_image, mask)
 
         if isinstance(rm_map, str):
@@ -1066,7 +1098,7 @@ class PaperPlots:
 
     @staticmethod
     def figure_14_depolarisation(intensity, i_cube, q_cube, u_cube, mask,
-        start=0.004, smooth_sigma=1, output=f"{PFIGS}/14-depolzn.png"):
+        start=0.004, smooth_sigma=1, output=None):
         """
         Here we shall get the cube and use the first and last channels. We 
         therefore do not use the single generated FPOL map.
@@ -1077,6 +1109,10 @@ class PaperPlots:
             CUBES containing data for all the channels available. I will only use the
             first and last channels available int he cube
         """
+        if output is None:
+            output = f"{PFIGS}/14-depolzn.png"
+
+
         mask_data = fits.getdata(mask).squeeze()
         mask_data = ~np.asarray(mask_data, dtype=bool).squeeze()
 
@@ -1134,7 +1170,7 @@ class PaperPlots:
     @staticmethod
     def figure_14_depolarisation_errmap(intensity, i_cube, q_cube, u_cube, mask,
         start=0.004, smooth_sigma=1, noise_file=None,
-        output=f"{PFIGS}/14-depolzn-errors.png"):
+        output=None):
         """
         Here we shall get the cube and use the first and last channels. We 
         therefore do not use the single generated FPOL map.
@@ -1145,6 +1181,9 @@ class PaperPlots:
             CUBES containing data for all the channels available. I will only use the
             first and last channels available int he cube
         """
+        if output is None:
+            output = f"{PFIGS}/14-depolzn-errors.png"
+
         rg_data = dict(np.load(noise_file))
         errs = {key.lower(): rg_data[key][[0,-1], None, None] for key in 
             ["I_err", "Q_err", "U_err"]}
@@ -1247,6 +1286,9 @@ class PaperPlots:
         smooth_sigma
             Factor to smooth the contours
         """
+        if output is None:
+            output = f"{PFIGS}/12-rm-lobes.png"
+
         plt.close("all")
         i_data = rfu.get_masked_data(i_image, all_mask)
 
@@ -1339,7 +1381,7 @@ class PaperPlots:
     def figure_12_13_rm_lobes_histogram_rick(i_image, rm_image, emask, wmask,
         lmask, all_mask, rick_rm, rick_east, rick_west, 
         start=0.004, smooth_sigma=0,
-        output=f"{PFIGS}/12-rm-lobes-with-ricks.png"):
+        output=None):
         """
         RM and histogram for lobes 
 
@@ -1360,6 +1402,9 @@ class PaperPlots:
         smooth_sigma
             Factor to smooth the contours
         """
+        if output is None:
+            output = f"{PFIGS}/12-rm-lobes-with-ricks.png"
+
         plt.close("all")
         i_data = rfu.get_masked_data(i_image, all_mask)
 
@@ -1732,13 +1777,14 @@ if __name__ == "__main__":
     opts = parser().parse_args()
     if opts.output_dir is not None:
         PFIGS = opts.output_dir
-
     run_paper_mill()
     # fixer()
 
     """       
     Running this script with
     
-    python qu_pol/test_paper_plots.py --input-maps $prods/initial -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
-
+    python qu_pol/test_paper_plots.py --input-maps $prods/initial \
+        -rim i-mfs.fits --cube-name $conv_cubes/*-conv-image-cube.fits \
+        --mask-name $mask_dir/true_mask.fits -elm $mask_dir/east-lobe.fits \
+        -wlm $mask_dir/west-lobe.fits -o $prods/some-plots
     """
