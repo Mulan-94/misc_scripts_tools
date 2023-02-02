@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import subprocess
+import shutil
 import sys
 
 from concurrent import futures
@@ -27,10 +28,7 @@ from scrap.image_utils import (read_fits_image, region_flux_jybm, region_is_abov
     read_regions_as_pixels, make_default_regions, make_noise_region_file,
     parse_valid_region_candidates, write_regions, image_noise, get_wcs)
 from scrap.plotting import overlay_regions_on_source_plot
-
-
-
-            
+        
 
 def initialise_globals(odir="scrappy-out"):
     global ODIR, RDIR, PLOT_DIR, LOS_DIR, RFILE, CURRENT_RFILE, NRFILE
@@ -88,6 +86,7 @@ def make_syncd_data_stores(size, syncd=True):
         "pangle": dtype,
         "pangle_err": dtype,
         "snr": dtype,
+        "psnr": dtype,
         "freqs": dtype,
         "lambda_sq": dtype,
         "noise": dtype,
@@ -155,14 +154,18 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg,
     signal_q = region_flux_jybm(reg, q_data.data)
     signal_u = region_flux_jybm(reg, u_data.data)
 
+    p_snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
+    i_snr = signal_to_noise(signal_i, global_noise)
+
+    sds["snr"][cidx] = i_snr
+    sds["psnr"][cidx] = p_snr
+
     if USE_POLZD_SNR:
-        snr = polarised_snr(signal_q, signal_u, q_noise, u_noise)
-        # noise = linear_polzn_error(signal_q, signal_u, q_noise, u_noise)
+        snr = p_snr
     else:
         # get snr of total intensity to global total intensity noise
-        snr = signal_to_noise(signal_i, global_noise)
+        snr = i_snr
 
- 
     # Check 2: Is the region above the threshold ?
     if region_is_above_thresh(snr=snr, threshold=threshold):
         # store signal and noise info
@@ -185,7 +188,7 @@ def parse_valid_fpol_region_per_region(triplets, cidx, reg, noise_reg,
             u_noise)
         sds["pangle"][cidx] = polzn_angle(signal_q, signal_u)
         sds["pangle_err"][cidx] = polzn_angle_error(signal_q, signal_u, q_noise, u_noise)
-        sds["snr"][cidx] = snr
+        
         # sds["chan_width"][cidx] = i_data.header["CDELT3"]
         # sds["freqs"][cidx] = i_data.freq
         # sds["lambda_sq"][cidx] = lambda_sq(i_data.freq, i_data.header["CDELT3"])
@@ -224,7 +227,6 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
     # get the single reference global noise from the noise reference image
     global_noise = image_noise(noise_reg, read_fits_image(noise_ref).data)
 
-
     valid_regions = []
     count = 1
     for ridx, reg in enumerate(regs):
@@ -232,8 +234,13 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
         # create some data store that'll store region data
         global sds
 
-        sds = make_syncd_data_stores(len(images), syncd=True)       
-        snitch.info(f"Region: {reg.meta['text']}")
+        sds = make_syncd_data_stores(len(images), syncd=True)   
+
+        # for orphaned regions  
+        if "text" not in reg.meta:
+            reg.meta["text"] = f"reg_{ridx+1}" 
+
+        snitch.info(f"Region: {reg.meta.get('text', ridx)}")
 
         with futures.ProcessPoolExecutor(max_workers=NWORKERS) as executor:
             results = list(executor.map(
@@ -270,7 +277,12 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
             snitch.warning(f"{reg.meta['text']}: flagged {n_masked}/{n_chans} points")
         
             outfile = fullpath(LOS_DIR, f"reg_{count}")
+            
+            if "tag" not in reg.meta:
+                reg.meta["tag"] = ["g1"]
+            
             sds["tag"] = ','.join(reg.meta["tag"])
+            
             np.savez(outfile, **sds)
             count += 1
 
@@ -354,6 +366,7 @@ def step4_plots():
 
 
 def main():
+    global RDIR, RFILE, CURRENT_RFILE, NRFILE
     opts = parser().parse_args()
 
     # doing it this way to modify odir
@@ -382,8 +395,18 @@ def main():
     ##########################################
 
     if opts.rfile is not None:
-        RFILE = opts.rfile
-        snitch.info(f"Region file: {RFILE}")
+        snitch.info(f"Region file: {opts.rfile}")
+        # copy custom region file to usual destination
+        RDIR = make_out_dir(RDIR)
+        RFILE = fullpath(RDIR, "regions-default")
+        CURRENT_RFILE = RFILE
+        shutil.copy(opts.rfile, RFILE+".reg")
+    
+    if opts.nrfile is not None:
+        snitch.info(f"Region file: {opts.nrfile}")
+        RDIR = make_out_dir(RDIR)
+        NRFILE = fullpath(RDIR, "noise-region")
+        shutil.copy(opts.nrfile, NRFILE+".reg")
 
     if opts.reg_size is None:
         reg_size = REG_SIZE
@@ -436,7 +459,7 @@ def main():
         USE_POLZD_SNR = opts.polzd_snr
 
     # For regions
-    if opts.regions_only or "r" in todo:
+    if opts.regions_only or "r" in todo and opts.rfile is None:
 
         step1_default_regions(reg_size, wcs_ref, bounds,
             threshold=threshold, rnoise=rnoise)
@@ -445,7 +468,6 @@ def main():
     # For scrappy
     if opts.los_only or "l" in todo:
  
-
         if opts.image_dir is not None:
             image_dir = opts.image_dir
             step3_valid_los_regs(image_dir, threshold, wcs_ref, rnoise=rnoise)

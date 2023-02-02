@@ -108,6 +108,11 @@ def parser():
         help="""An input region file. Otherwise, one will be auto-generated.
         Genereated regions will be stored here
         """)
+    regopts.add_argument("-nrf", "--noise-region-file", dest="nrfile", type=str,
+        default=None, metavar="", 
+        help="""An input region file. Otherwise, one will be auto-generated.
+        Custom For Pictor A !
+        """)
     regopts.add_argument("-rs", "--region-size", dest="reg_size", #nargs="+",
         type=int, #default=[],
          metavar="", 

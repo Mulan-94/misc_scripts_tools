@@ -280,6 +280,7 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
 
 def make_noise_region_file(name=None, reg_xy=None):
     """
+    todo: autogenerate of source noise region
     Write out a region file containing the noise region
     reg_xy: str
         the x and y coordinates and the region size of the noise region

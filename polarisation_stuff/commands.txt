@@ -128,6 +128,22 @@ python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o pica-4mjy-mask.fits -abo
 
 
 
+############################ Investigations ####################################
 ##### Problematic RM AREAS
 python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir relevant-images --threshold 50 -odir testo -ref-image i-mfs.fits -nri i-mfs.fits -m $mask_dir/problematic-rm.fits
 
+### same but now with a region file containing desired regions instead of using a mask
+# generate data for these regions
+python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir ../../relevant-images --threshold 50 -odir weirdo -ref-image ../../i-mfs.fits -nri ../../i-mfs.fits -rf rm-weirdos-only.reg -nrf noise-region.reg 
+
+ln -s weirdo-s3/los-data weirdo-data
+python plt-script.py 
+
+
+###### double peaks
+python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir ../../relevant-images --threshold 50 -odir weirdo -ref-image ../../i-mfs.fits -nri ../../i-mfs.fits -rf 2peak.reg -nrf noise-region.reg 
+
+ln -s weirdo-s3/los-data weirdo-data
+python plt-script.py 
+
+############################ Investigations ####################################
