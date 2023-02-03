@@ -136,14 +136,21 @@ python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir relevant-images --threshold 5
 # generate data for these regions
 python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir ../../relevant-images --threshold 50 -odir weirdo -ref-image ../../i-mfs.fits -nri ../../i-mfs.fits -rf rm-weirdos-only.reg -nrf noise-region.reg 
 
+
+python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id weirdo-s3/los-data -od weirdo-s3/los-rm-data -md 400 --depth-step 1 -np
+
 ln -s weirdo-s3/los-data weirdo-data
+ln -s weirdo-s3/los-rm-data weirdo-rm-data
 python plt-script.py 
 
 
 ###### double peaks
 python qu_pol/scrappy/scrap/scrappy.py -rs 3 -idir ../../relevant-images --threshold 50 -odir weirdo -ref-image ../../i-mfs.fits -nri ../../i-mfs.fits -rf 2peak.reg -nrf noise-region.reg 
 
+python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id weirdo-s3/los-data -od weirdo-s3/los-rm-data -md 400 --depth-step 1 -np
+
 ln -s weirdo-s3/los-data weirdo-data
+ln -s weirdo-s3/los-rm-data weirdo-rm-data
 python plt-script.py 
 
 ############################ Investigations ####################################

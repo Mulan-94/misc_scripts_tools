@@ -311,6 +311,8 @@ def arg_parser():
     parse.add_argument("-iters", "--iters", dest="niters", type=int,
         default=1000,
         help="Number of RM clean iterations. Default is 1000")
+    parse.add_argument("-np", "--no-plot", dest="plot", action="store_false",
+        help="plots for this data? Default is to plot")
     return parse
 
 
@@ -428,7 +430,7 @@ def plot_rmtf(los_rm, rmplot_name):
     fig.savefig(ofile)
     snitch.info(f"Saved RMTF plot to: {ofile}")
 
-def rm_and_plot(data_dir, opts=None):
+def rm_and_plot(data_dir, opts=None, plot=True):
     los = read_los_data(data_dir)
     if los.lambda_sq is None:
         los.lambda_sq = lambda_sq(los.freqs, los.chan_width)
@@ -444,7 +446,10 @@ def rm_and_plot(data_dir, opts=None):
         depth=opts.max_fdepth, odir=opts.output_dir)
     
     #plotting everything
-    rmplot_name = plot_los_rmdata(los, rmout, losdata_fname)
+    if plot:
+        rmplot_name = plot_los_rmdata(los, rmout, losdata_fname)
+    else:
+        rmplot_name = False
     return rmplot_name
         
 
@@ -461,9 +466,10 @@ def main():
             snitch.info("No los data files found")
             sys.exit()
 
+        plot = opts.plot
         with ProcessPoolExecutor() as executor:
             results = list(executor.map(
-                partial(rm_and_plot, opts=opts),
+                partial(rm_and_plot, opts=opts, plot=plot),
                 data_files
             ))       
 
@@ -482,7 +488,9 @@ def main():
                             opts.depth_step)
         rmsf_orig = lambda_to_faraday(los.lambda_sq, phi_range, 1)
         rmsf = dicto({"depths": phi_range, "rmtf": rmsf_orig})
-        plot_rmtf(rmsf, results[0])
+
+        if opts.plot:
+            plot_rmtf(rmsf, results[0])
     return
     
 if __name__ == "__main__":
