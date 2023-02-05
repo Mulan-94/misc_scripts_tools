@@ -326,7 +326,7 @@ def step1_default_regions(reg_size, wcs_ref, bounds, threshold=1, rnoise=None):
     return
 
 
-def step2_valid_reg_canidates(wcs_ref, noise_ref, threshold, rnoise=None):
+def step2_valid_reg_candidates(wcs_ref, noise_ref, threshold, rnoise=None):
     # Step 2: Determines which regions meet the requried threshold
     # we use the I-MFS image here. Basiclally just map the source extent
     global CURRENT_RFILE, NRFILE
@@ -442,7 +442,7 @@ def main():
             y_range = opts.y_range
         bounds = [*x_range, *y_range]
 
-    if opts.noise_ref is None:
+    if opts.noise_ref is not None:
         noise_ref = opts.noise_ref
     else:
         noise_ref = "i-mfs.fits"
@@ -463,7 +463,7 @@ def main():
 
         step1_default_regions(reg_size, wcs_ref, bounds,
             threshold=threshold, rnoise=rnoise)
-        step2_valid_reg_canidates(wcs_ref, noise_ref, threshold, rnoise=rnoise)
+        step2_valid_reg_candidates(wcs_ref, noise_ref, threshold, rnoise=rnoise)
     
     # For scrappy
     if opts.los_only or "l" in todo:
