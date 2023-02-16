@@ -98,6 +98,10 @@ def staff(weirdo, weirdo_rm, odir):
     return True
 
 def plot(dat, dat_rm, odir):
+
+    if "lpol" not in dat:
+        dat["lpol"] = dat["Q"] + 1j*dat["U"]
+
     plt.close("all")
     fig, ax = plt.subplots(ncols=3, nrows=2, sharex=False, figsize=(16,9))
     ax[0,0].errorbar(dat["lambda_sq"], dat["Q"], yerr=dat["Q_err"],
@@ -184,8 +188,7 @@ if __name__ == "__main__":
 
     python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id weirdo-s3/los-data -od weirdo-s3/los-rm-data -md 400 --depth-step 1 -np
 
-    ln -s weirdo-s3/los-data weirdo-data
-
+    ln -s weirdo-s3/los-data weirdo-data; 
     ln -s weirdo-s3/los-rm-data weirdo-rm-data
 
     python plt-script.py 

@@ -326,12 +326,14 @@ def read_los_data(filename, compress=True):
     mask = losdata.pop("mask")
     if compress:
         for key, value in losdata.items():
-            if key.lower() == "tag":
+            if key.lower() == "tag" or value.size==1:
                 continue
             # get only data that is not masked
             losdata[key] = np.ma.masked_array(
                 data=value, mask=mask).compressed()
 
+    if "lpol" not in losdata:
+        losdata["lpol"] = losdata["Q"] + 1j*losdata["U"]
     losdata["reg_num"] = reg_num
     losdata = dicto(losdata)
 
