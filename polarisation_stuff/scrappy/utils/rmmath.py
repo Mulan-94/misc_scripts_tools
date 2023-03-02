@@ -13,7 +13,7 @@ def chan_width_wavelengths(center_freq: float, chan_width: float):
     Channel width in wavelengths
     """
     cww = ((2 * c**2 * chan_width)/center_freq**2) \
-        (1 + 0.5 * (chan_width/center_freq)**2)
+        * (1 + 0.5 * (chan_width/center_freq)**2)
     return cww
 
 def freq_sqrt(lamsq):
@@ -24,6 +24,10 @@ def freq_sqrt(lamsq):
     # frequency to wavelength
     freq_ghz = (c/lamsq)
     return freq_ghz
+
+
+simple_lsq = lambda x: (c/x)**2
+
 
 def lambda_sq(center_freq: float, chan_width: float):
     """Equation 34
@@ -138,4 +142,21 @@ def rmtf_resolution(lambda_sq_min: float, lambda_sq_max: float):
     """
     msens = (2 * 3**0.5)/(lambda_sq_max - lambda_sq_min)
     return msens
+
+
+def max_chan_width(max_rm, max_rot, obs_freq):
+    """
+    Get the maximum allowable channel width before bandwidth depolzn
+    takes over. Sebokolodi 2020 Eq 4
+
+    max_rm: float
+        Maximum known RM of source / maximum fdepth possible
+    max_rot: float
+        Maximum allowable rotation per channel in degrees
+    """
+    max_rot = np.deg2rad(max_rot)
+    wave_sq = simple_lsq(obs_freq)
+    max_cw = (max_rot * obs_freq) /(2 * wave_sq * max_rm)
+    print(f"{max_cw/1e6:.2f} MHz")
+    return max_cw
 
