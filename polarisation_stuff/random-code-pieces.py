@@ -78,6 +78,48 @@ for reg in range(1, 101):
 
 # plot RM spacing distribution histogram
 
+def plot_rm_spacing_single(bins=15):
+    rm1, rm2 = [], []
+    f_rm1, f_rm2 = [], []
+    nf_rm1, nf_rm2 = [], []
+    for reg in range(1, 101):
+        data = dict(np.load(f"sim-data/two/los-data-nf/reg_{reg}.npz"))
+        rm1.append(data["in_rm"])
+        rm2.append(data["in_rm2"])
+
+
+        f_fit_data = np.loadtxt(f"sim-data/two/qu-fits-f-dual/qufit-reg_{reg}-fitparameters.txt")
+        nf_fit_data = np.loadtxt(f"sim-data/two/qu-fits-nf-dual/qufit-reg_{reg}-fitparameters.txt")
+        # get p2 [2] and p6 [6]
+        f_rm1.append(f_fit_data[2])
+        f_rm2.append(f_fit_data[6])
+
+        nf_rm1.append(nf_fit_data[2])
+        nf_rm2.append(nf_fit_data[6])
+
+    
+    rm1 = np.array(rm1)
+    rm2 = np.array(rm2)
+
+    f_rm1 = np.array(f_rm1)
+    f_rm2 = np.array(f_rm2)
+    nf_rm1 = np.array(nf_rm1)
+    nf_rm2 = np.array(nf_rm2)
+
+    #space = np.abs(rm1 - rm2)
+    space = rm1 - rm2
+
+    plt.close("all")
+    fig, ax = plt.subplots(figsize=(6,6), ncols=1, nrows=1)
+    ax.hist(space, bins, histtype="step", color="orangered")
+    ax.set_xlabel("RM spacing between two components [rad/m$^2$]")
+    ax.yaxis.set_visible(False)
+
+    fig.savefig(mkpath(
+        "versuz", f"rm_spacing-a1.png"))
+
+    return rm1, rm2,f_rm1,f_rm2,nf_rm1,nf_rm2
+
 
 
 def plot_rm_spacing(bins=10):

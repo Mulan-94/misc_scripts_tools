@@ -227,6 +227,29 @@ def read_mask(fits):
 
     return xpix, ypix
 
+
+def clean_header(hdr):
+    print("Clean header")   
+    
+    naxis = hdr["NAXIS"]
+    if "HISTORY" in hdr:
+        del hdr["HISTORY"]
+
+    # remove extra acces
+    if naxis > 2:
+        for _ in range(1, (naxis-2)+1):
+            for kw in ("CTYPE", "CRVAL", "CRPIX", "CDELT", "CUNIT"):
+                if f"{kw}{2+_}"in hdr:
+                    hdr.remove(f"{kw}{2+_}")
+
+    hdr_orig = hdr.copy()
+    for key, value in hdr_orig.items():
+        if "BPA" in key or "BMAJ" in key or "BMIN" in key:
+            hdr.remove(key)
+    
+    return hdr
+    
+    
 def arg_parser():
     parser = argparse.ArgumentParser(description='Performs linear ' 
              'least squares fitting to Q and U image.')
@@ -270,7 +293,7 @@ def main():
 
     wavelengths =  (299792458.0/frequencies)**2 
     qdata, qhdr = read_data(args.qfits) # run Q-cube 
-    udata, uhdr = read_data(args.ufits) # run U-cube
+    udata, _ = read_data(args.ufits) # run U-cube
 
     pdata = qdata + 1j*udata
 
@@ -326,6 +349,9 @@ def main():
     
     
     # now save the fits
+    # clean the header a little
+    qhdr = clean_header(qhdr)
+
     # intrisic fractional polarisation
     p0_hdr = modify_fits_header(qhdr, ctype='p', unit='ratio')
 

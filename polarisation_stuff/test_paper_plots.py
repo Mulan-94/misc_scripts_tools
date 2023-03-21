@@ -7,7 +7,7 @@ from astropy.io import fits
 from astropy.wcs import WCS
 from glob import glob
 from matplotlib import ticker
-from glob import glob
+
 import scipy.ndimage as snd
 
 from matplotlib import colors
@@ -1313,8 +1313,8 @@ class PaperPlots:
         # #image.axis("off")
 
         ca = image.imshow(
-            rm_lobes, origin="lower", cmap="coolwarm", vmin=-45,
-            vmax=85, aspect="equal")
+            rm_lobes, origin="lower", cmap="coolwarm", vmin=-60,
+            vmax=60, aspect="equal")
         
         plt.colorbar(ca, location="right", shrink=0.90,
             label="RM", drawedges=False, pad=0)
@@ -1433,8 +1433,8 @@ class PaperPlots:
         # #image.axis("off")
 
         ca = image.imshow(
-            rm_lobes, origin="lower", cmap="coolwarm", vmin=-45,
-            vmax=85, aspect="equal")
+            rm_lobes, origin="lower", cmap="coolwarm", vmin=-60,
+            vmax=60, aspect="equal")
         
         plt.colorbar(ca, location="right", shrink=0.90,
             label="RM", drawedges=False, pad=0)
@@ -1543,17 +1543,23 @@ def fixer():
             os.makedirs(os.path.join(PFIGS, o_dir))
 
     
-    # PaperPlots.figure_12_13_rm_lobes_histogram_rick(
-    #     imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
-    #     f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
-    #     f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
-    #     f"{mask_dir}/true_mask.fits",
-    #     f"{spectest}/from_rick/4k-proj/band-l-and-c-LCPIC-10.RM10.2.FITS-projected.fits",
-    #     f"{mask_dir}/rick-east-rm2.fits",
-    #     f"{mask_dir}/rick-west-rm2.fits",)
+    PaperPlots.figure_12_13_rm_lobes_histogram_rick(
+        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+        f"{mask_dir}/true_mask.fits",
+        f"{spectest}/from_rick/4k-proj/band-l-and-c-LCPIC-10.RM10.2.FITS-projected.fits",
+        f"{mask_dir}/rick-east-rm2.fits",
+        f"{mask_dir}/rick-west-rm2.fits",)
 
-    PaperPlots.figure_14_depolarisation_errmap(imgs[0], *cubes, mask,
-        noise_file=f"{products}/scrap-outputs-s3/los-data/reg_1.npz")
+    PaperPlots.figure_12_13_rm_lobes_histogram(
+        imgs[0], f"{products}/initial-RM-depth-at-peak-rm.fits",
+        f"{mask_dir}/east-lobe.fits", f"{mask_dir}/west-lobe.fits", 
+        f"{mask_dir}/lobes.fits", #f"{mask_dir}/no-core.fits"
+        f"{mask_dir}/true_mask.fits")
+
+    # PaperPlots.figure_14_depolarisation_errmap(imgs[0], *cubes, mask,
+    #     noise_file=f"{products}/scrap-outputs-s3/los-data/reg_1.npz")
 
 
 
