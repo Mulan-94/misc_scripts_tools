@@ -163,19 +163,24 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
     """
     data = fits.getdata(fname).squeeze()
     hdr = fits.getheader(fname)
-    del hdr["HISTORY"]
+    if "HISTORY" in hdr:
+        del hdr["HISTORY"]
 
     # cater for empty masks
-
-    if above is not None:
-        data = np.ma.masked_greater(data, above)
-    if below is not None:
-        data = np.ma.masked_less(data, below)
-    if None not in [above, below]:
+    if above is None and below is None:
+        # convert all masks to true, create an empty mask. ie everything is masked
         data = np.ma.masked_array(data=data, mask=np.ma.make_mask(data))
+    else:
+        if above is not None:
+            # mask everything BELOW this value. Everything ABOVE it isn't masked
+            data = np.ma.masked_less_equal(data, above)
+        if below is not None:
+            # mask everything ABOVE this value. Everything BELOW it isn't masked
+            data = np.ma.masked_greater_equal(data, below)
 
-    
-    mask = data.mask
+    # here unwanted regions are set to one. But in our mask, we want the wanted
+    # regions set to 1, so we invert the mask
+    mask = ~data.mask
     mask = mask.astype("uint8")
 
     if regname is not None:
@@ -190,8 +195,8 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
         if finale.sum() == 0:
             print("Invalid region(s). We're ignoring this")
         else:
-            mask = finale * mask
-        # plt.imshow(finale + mask, origin="lower")
+            mask = np.bitwise_or(finale, mask)
+        # plt.imshow(finale + mask, origign="lower")
         # ylim, xlim = np.where(mask+finale >= 1)
         # plt.xlim(np.min(xlim), np.max(xlim))
         # plt.ylim(np.min(ylim), np.max(ylim))
@@ -233,6 +238,9 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
     outname += ".mask.fits" if ".fits" not in outname else ""
 
     print(f"Writing output mask into {outname}")
+
+    if mask.max() == 1:
+        mask = mask.astype("uint8")
     # del hdr["BUNIT"]
     fits.writeto(outname, mask, header=hdr, overwrite=True)
 
