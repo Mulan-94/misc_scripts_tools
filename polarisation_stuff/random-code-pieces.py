@@ -215,3 +215,78 @@ def phase_center_from_ms(ms_name):
         alwayssign=True, precision=1)
     
     return ra_hms, dec_dms
+
+
+
+#--------------------------------------------------------------------------
+#--------------------------------------------------------------------------
+import astropy.units as u
+import astopy.constants as const
+
+def linear_angular(z, d_linear=None, theta=None):
+
+    """
+    Convert angular distance to linear scale and vice versa
+
+    inputs:
+    z : float
+        Redshift
+    d_linear: Tuple[float, str]
+        Tuple consisting of linear scale of the galaxy and its unit (mpc | kpc)
+    theta: Tuple[float, str]
+        Consisting of angular scale of the galaxy and its unit (rad, deg, arcsec, arcmin)
+
+    --------------------------------------------
+    Where separated by '|', it means that use a single item from either
+    side of the bracket, and use only that side for the rest of the choices
+    also ie. rad -> Mpc, arcmin -> kpc
+
+    Basic ingredients:
+    theta: [rad | arcmin]
+        Angular size of the galaxy
+    d_linear: [Mpc | kpc]
+        Actual linear size of the galaxy
+    d_to_gal: [Mpc | kpc]
+        Distance from the earth to the galaxy
+    z: [dimensionless]
+        Reshift of the galaxy
+    H0: [km/s]
+        Hubble's constant
+    v: [km/s]
+        Recession velocity
+    C: [km/s]
+        Speed of light in a vacuum
+
+    This information can be derived using the following basic formulas
+    1. theta = d_linear / d_to_gal
+    2. v = H0 * d_to_gal
+    3. z = v/C
+    """
+
+    # in km/s
+    C = const.c.value / 1000 
+
+    # in km/s
+    H0 = 70
+
+    if d_linear is not None:
+        # convert whatever to mpc
+        d_linear = (d_linear[0] * getattr(u, d_linear[1])).to("Mpc").value
+        # calculate theta in radians
+        theta = (d_linear * H0)/ (C * z)
+        # conver radians to arcsec
+        theta = (theta*u.rad).to("arcsec").value
+        res = dict(val=theta, unit="arcsec")
+    else:
+        # convert theta to radians
+        theta = (theta[0]* getattr(u, theta[1])).to("rad").value
+        # calculae linear size in mpc
+        d_linear = (theta * C * z) / H0
+        # convert mpc to kpc
+        d_linear = (d_linear*u.Mpc).to("kpc").value
+        res = dict(val=d_linear, unit="kpc")
+    
+    print("{val:.4f} {unit}".format(**res))
+    return
+
+#--------------------------------------------------------------------------

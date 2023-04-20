@@ -195,7 +195,7 @@ def make_mask(fname, outname, above=None, below=None, regname=None, ex_regname=N
         if finale.sum() == 0:
             print("Invalid region(s). We're ignoring this")
         else:
-            mask = np.bitwise_or(finale, mask)
+            mask = finale * mask
         # plt.imshow(finale + mask, origign="lower")
         # ylim, xlim = np.where(mask+finale >= 1)
         # plt.xlim(np.min(xlim), np.max(xlim))
@@ -290,5 +290,9 @@ if __name__ == "__main__":
 
     # with region exclusions
     python simple-mask.py ../6-00-polarimetry/i-mfs.fits -o test.fits -above 4e-3 -rb important_regions/lobes/2023-lobes.reg -er important_regions/hotspots/core.reg
+
+
+    # pica source mask
+    python simple-mask.py -o mod-pica-4mjy-mask.fits -er 4mjy-remove-patch.reg ../6-00-polarimetry/i-mfs.fits --above 4e-3 -rb important_regions/pica_region-for-mask.reg
 
     """

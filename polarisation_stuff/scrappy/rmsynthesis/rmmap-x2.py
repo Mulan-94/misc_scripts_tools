@@ -255,22 +255,22 @@ def arg_parser():
              'least squares fitting to Q and U image.')
 
     add = parser.add_argument
-    add('-q', '--qcube', dest='qfits', help='Stokes Q cube (fits)')
-    add('-u', '--ucube', dest='ufits', help='Stokes U cube (fits)')
-    add('-i', '--icube', dest='ifits', help='Stokes I cube (fits)')
-    add('-f', '--freq', dest='freq', help='Frequency file (text)')  
+    add('-q', '--qcube', dest='qfits', help='Stokes Q cube (fits)', type=str)
+    add('-u', '--ucube', dest='ufits', help='Stokes U cube (fits)', type=str)
+    add('-i', '--icube', dest='ifits', help='Stokes I cube (fits)', type=str)
+    add('-f', '--freq', dest='freq', help='Frequency file (text)', type=str)  
 
     add('-ncore', '--ncore', dest='numProcessor',
         help='number of cores to use. Default 60.', default=20, type=int)
     add('-mask', '--maskfits', dest='maskfits',
-        help='A mask image (fits)', default=None)
-    add('-o', '--prefix', dest='prefix', help='This is a prefix for output files.')
+        help='A mask image (fits)', default=None, type=str)
+    add('-o', '--prefix', dest='prefix', help='This is a prefix for output files.', type=str)
     add("-niters", "--niters", dest="niters",
-        help="Number of clean iterations. Default 1000", default=1000)
+        help="Number of clean iterations. Default 1000", default=1000, type=int)
     add("-md", "--max-depth", dest="max_depth",
-        help="Maximum Farady depth to fit for. Default 500", default=500)
+        help="Maximum Farady depth to fit for. Default 500", default=500, type=int)
     add("--depth-step", dest="depth_step",
-        help="Depth stepping. Default 1", default=1)
+        help="Depth stepping. Default 1", default=1, type=int)
    
     return parser.parse_args()
 

@@ -35,7 +35,9 @@ snitch.setLevel("INFO")
 # matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
 # matplotlib.use('Agg') 
 plt.style.use("seaborn")
-FIGSIZE = (16,9)
+# FIGSIZE = (16,9)
+# for publication
+FIGSIZE = (10,5)
 get_wavel = lambda x: 3e8/x
 lw = 1.2
 
@@ -360,7 +362,72 @@ def write_out_rmsynthesis_data(data, idir, depth, odir=None):
 def plot_los_rmdata(los, los_rm, losdata_fname):
     odir = os.path.dirname(losdata_fname) 
     odir = make_out_dir(odir+"-plots")
-    ofile = fullpath(odir, f"reg_{los.reg_num}-{los.tag}.png")
+    ofile = fullpath(odir, f"reg_{los.reg_num}")
+    if los.tag is not None:
+        ofile += f"-{los.tag}.png"
+    else:
+        ofile += ".png"
+
+    plt.close("all")
+    fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
+
+    ax[0].errorbar(los.lambda_sq, los.fpol, yerr=los.fpol_err, 
+                    fmt='o', ecolor="red")
+    ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+    ax[0].set_ylabel('Fractional Polarisation')
+
+    
+    los.pangle = np.unwrap(los.pangle, period=np.pi, discont=np.pi/2)
+    # linear fitting
+    res = np.ma.polyfit(los.lambda_sq, los.pangle, deg=1)
+    reg_line = np.poly1d(res)(los.lambda_sq)
+    
+    # ax[1].plot(los.lambda_sq, los.pangle, "r+", label="original")
+    ax[1].errorbar(los.lambda_sq, los.pangle, yerr=los.pangle_err,
+                    fmt='o', ecolor="red", label="unwrapped angle")
+    ax[1].plot(los.lambda_sq, reg_line, "g--",
+        label=f"linear fit, slope: {res[0]:.3f}", lw=lw)
+    ax[1].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+    ax[1].set_ylabel('Polarisation Angle')
+    ax[1].legend()
+
+
+    fclean = np.abs(los_rm.fclean)
+    rm_val = los_rm.depths[np.argmax(fclean)]
+
+    ax[2].plot(los_rm.depths, np.abs(los_rm.fdirty),
+                'r--', label='Dirty Amp')
+    if "fclean" in los_rm:
+        ax[2].plot(los_rm.depths, fclean, 'k',
+            label=f'Clean Amp, RM {rm_val:.2f}')
+        # ax[2].axvline(rm_val, label=f"{rm_val:.3f}")
+    ax[2].set_xlabel('Faraday depth [rad m$^{-2}$]')
+    ax[2].set_ylabel('Farady Spectrum')
+    ax[2].legend(loc='best')
+
+    # if "snr" in los:
+    #     snr_idx = np.argmax(los.snr)
+    #     fig.suptitle(
+    #         # f"(||P|| : P$_{{err}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
+    #         f"(I$_{{los}}$ : I$_{{global\_rms}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
+    #         f"@ chan = {los.freqs[snr_idx]/1e9:.2f} GHz " +
+    #         f"and $\lambda^{{2}}$ = {los.lambda_sq[snr_idx]:.2f}")
+    fig.tight_layout()
+    fig.savefig(ofile)
+    
+    snitch.info(f"Saved Plot at: {ofile}")
+    return ofile
+
+
+
+def plot_los_rmdata(los, los_rm, losdata_fname):
+    odir = os.path.dirname(losdata_fname) 
+    odir = make_out_dir(odir+"-plots")
+    ofile = fullpath(odir, f"reg_{los.reg_num}")
+    if los.tag is not None:
+        ofile += f"-{los.tag}.png"
+    else:
+        ofile += ".png"
 
     plt.close("all")
     fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
@@ -413,19 +480,21 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     return ofile
 
 
+
 def plot_rmtf(los_rm, rmplot_name):
     plt.close("all")
     fig, ax = plt.subplots(figsize=FIGSIZE, ncols=1, squeeze=True)
     
     ax.plot(los_rm.depths, np.abs(los_rm.rmtf), "k-",
-        lw=lw, label="Amp")
+        lw=4, label="Amp")
     ax.plot(los_rm.depths, los_rm.rmtf.real,
-        color="orangered", ls="--", lw=lw, label="Real")
+        color="orangered", ls="--", lw=4, label="Real")
     ax.plot(los_rm.depths, los_rm.rmtf.imag, "g:",
-        lw=lw, label="Imag")
-    ax.set_xlabel(r"Faraday depth $\phi$")
-    ax.set_ylabel("RMTF")
-    ax.legend()
+        lw=4, label="Imag")
+    ax.tick_params(axis='both', labelsize=30)
+    ax.set_xlabel(r"Faraday depth $\phi$", fontsize=30)
+    ax.set_ylabel("RMTF", fontsize=30)
+    ax.legend(fontsize=30)
     fig.tight_layout()
     
     ofile = fullpath(os.path.dirname(rmplot_name), "rmtf.png")
