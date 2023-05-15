@@ -34,7 +34,7 @@ snitch.setLevel("INFO")
 # import matplotlib
 # matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
 # matplotlib.use('Agg') 
-plt.style.use("seaborn")
+# plt.style.use("seaborn")
 # FIGSIZE = (16,9)
 # for publication
 FIGSIZE = (10,5)
@@ -489,16 +489,16 @@ def plot_rmtf(los_rm, rmplot_name):
         lw=4, label="Amp")
     ax.plot(los_rm.depths, los_rm.rmtf.real,
         color="orangered", ls="--", lw=4, label="Real")
-    ax.plot(los_rm.depths, los_rm.rmtf.imag, "g:",
+    ax.plot(los_rm.depths, los_rm.rmtf.imag, ":", color="blue",
         lw=4, label="Imag")
-    ax.tick_params(axis='both', labelsize=30)
-    ax.set_xlabel(r"Faraday depth $\phi$", fontsize=30)
-    ax.set_ylabel("RMTF", fontsize=30)
-    ax.legend(fontsize=30)
+    ax.tick_params(axis='both', labelsize=20)
+    ax.set_xlabel(r"Faraday depth $\phi$", fontsize=20)
+    ax.set_ylabel("RMTF", fontsize=20)
+    ax.legend(fontsize=20)
     fig.tight_layout()
     
-    ofile = fullpath(os.path.dirname(rmplot_name), "rmtf.png")
-    fig.savefig(ofile)
+    ofile = fullpath(os.path.dirname(rmplot_name), "rmtf.pdf")
+    fig.savefig(ofile, dpi=300)
     snitch.info(f"Saved RMTF plot to: {ofile}")
 
 def rm_and_plot(data_dir, opts=None, plot=True):

@@ -37,17 +37,19 @@ def read_cube_fits(imname, channels=None):
 
 
 def plotme(freqs, bmajs, bmins, outname, title="All freqs"):
+    # save this beam information into beams file
+    np.savez(os.path.join(os.path.dirname(os.path.realpath(outname)), "beams"),
+        freqs=freqs, bmajs=bmajs, bmins=bmins)
 
     fig, ax = plt.subplots(figsize=(16,9), ncols=2, sharex=True, sharey=True)
     ax[0].plot(freqs, bmajs, "bo", markersize=4)
     ax[0].axhline(bmajs.max(), linestyle="--", linewidth=1)
-
-    maxs = freqs[np.where(bmajs == bmajs.max())]
-    if maxs.size > 1:
-        maxs = maxs[0]
-
+    bm_max = np.argmax(bmajs)
+    maxs = freqs[bm_max]
+    #if maxs.size >= 1:
+    #    maxs = maxs[0]
     ax[0].annotate(f"{bmajs.max():.3}", 
-        xy=(freqs[maxs], bmajs.max()), color="red")
+        xy=(maxs, bmajs.max()), color="red")
 
 
     # #linear fit
@@ -64,11 +66,11 @@ def plotme(freqs, bmajs, bmins, outname, title="All freqs"):
     ax[1].plot(freqs, bmins, "bo", markersize=4)
     ax[1].axhline(bmins.max(), linestyle="--", linewidth=1)
     
-    maxs = freqs[np.where(bmins == bmins.max())]
-    if maxs.size > 1:
-        maxs = maxs[0]
+    bm_max = np.argmax(bmins)
+    maxs = freqs[bm_max]
+
     ax[1].annotate(f"{bmins.max():.3}", 
-        xy=(freqs[maxs], bmins.max()), 
+        xy=(maxs, bmins.max()), 
         color="red")
 
     #linear fit
@@ -133,6 +135,127 @@ def single_cube_file(cube_name, oname=None, channels=None):
 
 
 
+# merging to model some beam trend blabla
+#------------------------------------------
+
+def model(x, data):
+    res = np.ma.polyfit(x, data, deg=1)
+    reg_line = np.poly1d(res)(x)
+    return reg_line
+
+
+def mask_them(mask, compress=True, **kwargs):
+    for key, value in kwargs.items():
+        kwargs[key] = np.ma.masked_array(data=kwargs[key], mask=mask)
+        if compress:
+            kwargs[key] = kwargs[key].compressed()
+    return kwargs
+
+
+def plot_beam_axis(**kwargs):
+    plt.close("all")
+    # ma_res,ma_lim,mi_res,mi_lim
+    bmaj, bmin, freqs, ma_res, ma_lim, mi_res, mi_lim, ma_model,mi_model = list(
+            map(kwargs.get, 
+                ("bma,bmi,freqs,ma_res,ma_lim,"+
+                "mi_res,mi_lim,ma_model,mi_model").split(",")))
+
+    fig, ax = plt.subplots(figsize=(16, 9), ncols=2, nrows=3, squeeze=False,
+        sharex=True, sharey="row", gridspec_kw={"wspace":0})
+
+    ax[0, 0].plot(freqs, bmin, "bo", alpha=0.5, markersize=5)
+    ax[0, 0].plot(freqs, mi_model, color="red")
+    ax[0, 0].set_title("Valid channels: BMIN")
+    for _ in np.nonzero(~bmin.mask)[0]:
+        ax[0,0].text(freqs[_], bmin[_], f"{_}".zfill(2), fontsize=4, ha="center")
+
+    ax[0, 1].plot(freqs, bmaj, "bo", alpha=0.5, markersize=5)
+    ax[0, 1].plot(freqs, ma_model, color="red")
+    ax[0, 1].set_title("Valid channels: BMAJ")
+    ax[0, 1].xaxis.set_ticks(np.arange(0, bmaj.size, 5))
+    for _ in np.nonzero(~bmaj.mask)[0]:
+        ax[0,1].text(freqs[_], bmaj[_], f"{_}".zfill(2), fontsize=4, ha="center")
+
+    ax[1, 0].plot(freqs.data, bmin.data, "bo", alpha=0.5, markersize=5)
+    ax[1, 0].plot(freqs.data, mi_model.data, color="red")
+    ax[1, 0].set_title("All Channels: BMIN")
+    for _ in np.nonzero(~bmin.mask)[0]:
+        ax[1,0].text(freqs[_], bmin[_], f"{_}".zfill(2), fontsize=4, ha="center")
+
+
+    ax[1, 1].plot(freqs.data, bmaj.data, "bo", alpha=0.5, markersize=5)
+    ax[1, 1].plot(freqs.data, ma_model.data, color="red")
+    ax[1, 1].set_title("All Channels: BMAJ")
+    for _ in np.nonzero(~bmaj.mask)[0]:
+        ax[1,1].text(freqs[_], bmaj[_], f"{_}".zfill(2), fontsize=4, ha="center")
+
+    ax[2, 0].stem(freqs.data, np.abs(mi_res.data))
+    ax[2, 0].axhline(mi_lim, ls="--",color="k")
+    ax[2, 1].stem(freqs.data, np.abs(ma_res.data))
+    ax[2, 1].axhline(ma_lim, ls="--",color="k")
+    ax[2, 0].set_title("Residuals")
+    ax[2, 1].set_title("Residuals")
+    ax[2, 1].set_xlabel("Frequncies")
+    
+    oname = kwargs.get("oname", "beams.png")
+    fig.savefig(oname, bbox_inches="tight", dpi=300)
+
+
+def model_beam_variation(freqs, bm, perc=65):
+    """
+    Get the regression line and return the limit value
+    """
+    mod = model(freqs, bm)
+    residual = bm - mod
+    lim = np.percentile(np.abs(residual.compressed()), perc)
+    mask = np.ma.masked_greater(np.abs(residual), lim).mask
+    return mod, residual, mask, lim
+
+
+def read_and_plot_beams(fname="beams.npz", percentile=80):
+    bm = dict(np.load(fname))
+
+    bma, bmi, freqs = bm["bmajs"], bm["bmins"], bm["freqs"]
+    freqs = np.arange(freqs.size)
+
+    # remove the zero values
+    mask = np.ma.masked_equal(bma, 0).mask
+    masked = mask_them(mask, compress=False, bma=bma, bmi=bmi, freqs=freqs)
+    bma, bmi, freqs = list(map(masked.get, "bma,bmi,freqs".split(",")))
+
+    # model the bmaj and bmin: model, residual,mask, percentile_limit
+    ma_model, ma_res, ma_mask, ma_lim = model_beam_variation(freqs, bma, perc=percentile)
+    mi_model, mi_res, mi_mask, mi_lim = model_beam_variation(freqs, bmi, perc=percentile)
+
+    mask = np.logical_or(mi_mask, ma_mask)
+
+    masked = mask_them(mask ,compress=False, bma=bma, bmi=bmi, freqs=freqs,
+        ma_model=ma_model, mi_model=mi_model)
+
+    bma,bmi,freqs,ma_model,mi_model = list(
+            map(masked.get, "bma,bmi,freqs,ma_model,mi_model".split(",")))
+
+    chans = [f"{_}".zfill(4) for _ in np.nonzero(~mask)[0]]
+
+    print("Valid channels: {}".format(len(chans)))
+    print("Proposed selected channels: ", *chans)
+
+   
+    plot_beam_axis(bmi=bmi, bma=bma, freqs=freqs, ma_res=ma_res,
+        ma_lim=ma_lim, mi_res=mi_res, mi_lim=mi_lim, ma_model=ma_model,
+        mi_model=mi_model,
+        oname=os.path.join(os.path.dirname(os.path.realpath(fname)), "beams.png"))
+
+    with open("suggested-sel-chan.txt", "w") as fil:
+        for chan in chans:
+            fil.writelines(chan+"\n")
+
+
+
+
+#------------------------------------------
+
+
 def parser():
     ps = argparse.ArgumentParser()
     ps.add_argument("-c", "--cube", dest="cubes" , metavar="",
@@ -157,6 +280,13 @@ def parser():
         help="Channels numbers to select. Specify as space separated list"
     )
 
+    ps.add_argument("-p", "--percentile", dest="percentile", metavar="",
+        type=float, default=80, help="For the selected channels, n-th percentile. Only data below this value will be included from the beam."
+    )
+
+    ps.add_argument("-s", "--select", action="store_true", dest="select", 
+        help="Try and suggest valid channels. Use in conjuction with '-p'.")
+
     return ps
 
 
@@ -173,6 +303,12 @@ if __name__ == "__main__":
                 print(f"Channels: {ps.channels}")
                 file_grp = [file_grp[c] for c in ps.channels]
             multiple_single_files(files=file_grp, oname=ps.output)
+
+    if ps.select:    
+        read_and_plot_beams(
+            fname=os.path.join(os.path.dirname(os.path.realpath(ps.output)), "beams.npz"),
+            percentile=ps.percentile
+            )
 
 
 # How to run the script. Can be imported into ipython

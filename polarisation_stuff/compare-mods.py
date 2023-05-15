@@ -79,7 +79,7 @@ def plot_infos(regs, bf, aics, bics):
     # ax[2].legend()
     ax[2].set_ylabel(r"BIC$_{dual}$ - BIC$_{single}$", font="monospace", fontsize=15)
     fig.tight_layout() 
-    fig.savefig("dual-vs-single-comp-model.png", dpi=200)
+    fig.savefig("dual-vs-single-comp-model.pdf", dpi=200)
 
     # #############3 Bayesian factor only #################
     fig, ax = plt.subplots(figsize=(6,6))
@@ -87,7 +87,7 @@ def plot_infos(regs, bf, aics, bics):
     ax.set_ylabel(r"ln(BF) = ln(Z$_{dual}$) - ln(Z$_{single}$)", font="monospace", fontsize=15)
     ax.set_xlabel("LoS", font="monospace", fontsize=15)
     fig.tight_layout() 
-    fig.savefig("dual-vs-single-comp-model-bf.png", dpi=200)
+    fig.savefig("dual-vs-single-comp-model-bf.pdf", dpi=200)
 
 
 
