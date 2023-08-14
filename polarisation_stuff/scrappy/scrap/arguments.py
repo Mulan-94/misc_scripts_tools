@@ -80,6 +80,8 @@ def parser():
         type=int, default=None,
         help="How many workers to use for prcessing"
     )
+    genopts.add_argument("--debug", dest="debug", action="store_true",
+        help="""Disble parallel processing and enables sequential mode.""")
 
     
 

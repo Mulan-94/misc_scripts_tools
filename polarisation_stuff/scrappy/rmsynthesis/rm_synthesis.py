@@ -43,7 +43,7 @@ lw = 1.2
 
 
 
-def lambda_to_faraday(lambda_sq, phi_range, lpol):
+def lambda_to_faraday(lambda_sq, phi_range, lpol, derotate=True):
     """
     Computes Faraday Spectra using RM-Synthesis 
     as defined by Brentjens and de Bruyn (2005) eqn. 36
@@ -63,7 +63,10 @@ def lambda_to_faraday(lambda_sq, phi_range, lpol):
     N = len(lambda_sq)
 
     # get the initial lambda square value from the mean
-    init_lambda_sq = lambda_sq.mean()
+    if derotate:
+        init_lambda_sq = lambda_sq.mean()
+    else:
+        init_lambda_sq = 0
     fdata = np.zeros([len(phi_range)], dtype=complex)
     
 
@@ -79,12 +82,16 @@ def lambda_to_faraday(lambda_sq, phi_range, lpol):
     return fdata
 
 
-def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
+def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1, derotate=True):
     """
     Clean out the dirty Faraday dispersion measure
     """
-
-    fwhm = (3.8/ abs(lam2[0]-lam2[-1]))
+    if derotate:
+        fwhm = (3.8/ abs(lam2[0]-lam2[-1]))
+    else:
+        # use the peak of the real component for the gaussian as the CLEAN beam
+        # according to rudnick and cotton 2023
+        fwhm = 2 / (lam2[-1]+lam2[0])
 
     # FWHM of a gaussian is sigma * ((8ln2)**0.5)
     sigma = (fwhm/2.35482)
@@ -100,8 +107,8 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
     phi_pad = np.arange(-pad, pad, dpad)
     dshift = int(pad/(2.0 * dpad))
 
-    rmsf_orig = lambda_to_faraday(lam2, phi_range, 1) 
-    rmsf_fixed = lambda_to_faraday(lam2, phi_pad, 1) 
+    rmsf_orig = lambda_to_faraday(lam2, phi_range, 1, derotate=derotate) 
+    rmsf_fixed = lambda_to_faraday(lam2, phi_pad, 1, derotate=derotate) 
     components = np.zeros([len(phi_range)], dtype=complex)
 
     for n in range(niter):
@@ -220,7 +227,7 @@ def plot_data(lam, plam, phi, fphi):
 
 
 def rm_synthesis(lambda_sq, lpol, phi_max=600, phi_step=10, niter=1000, gain=0.1,
-    clean=False):
+    clean=False, derotate=True):
     """
     lambda_sq:
         Lambda squared
@@ -242,14 +249,14 @@ def rm_synthesis(lambda_sq, lpol, phi_max=600, phi_step=10, niter=1000, gain=0.1
     phi_range =  np.arange(-phi_max, phi_max+phi_step, phi_step)
     # this ensures that the middle value is zero. 
     
-    fdirty = lambda_to_faraday(lambda_sq, phi_range, lpol)
+    fdirty = lambda_to_faraday(lambda_sq, phi_range, lpol, derotate=derotate)
 
     outs = { "depths": phi_range, "fdirty": deepcopy(fdirty)}
     
     if clean:
         
         fclean, fcomp, rmtf = rm_clean(lambda_sq, phi_range, fdirty.copy(), 
-                    niter=niter, gain=gain)
+                    niter=niter, gain=gain, derotate=derotate)
         # fclean = lexy_rm_clean(lambda_sq, phi_range, fdirty, n_iterations=500, loop_gain=0.1, threshold=None)
         outs.update({"fclean": fclean, "rmtf": rmtf })
 
@@ -315,6 +322,10 @@ def arg_parser():
         help="Number of RM clean iterations. Default is 1000")
     parse.add_argument("-np", "--no-plot", dest="plot", action="store_false",
         help="plots for this data? Default is to plot")
+    parse.add_argument("-nd", "--no-derotate", dest="no_derotate", action="store_false",
+        help="Use this switch to NOT derotate the RMTF by the mean lambda squared.")
+    parse.add_argument("-debug", "--debug", dest="debug", action="store_true",
+        help="Enable debug mode, will run in serial mode")
     return parse
 
 
@@ -508,7 +519,7 @@ def rm_and_plot(data_dir, opts=None, plot=True):
     snitch.info("starting RM")
     rmout = rm_synthesis(
         los.lambda_sq, los.lpol, phi_max=opts.max_fdepth,
-        phi_step=opts.depth_step, niter=opts.niters, clean=True)
+        phi_step=opts.depth_step, niter=opts.niters, clean=True, derotate=opts.no_derotate)
     
     rmout["reg_num"] = los.reg_num
     rmout["tag"] = los.tag or ""
@@ -538,26 +549,27 @@ def main():
             sys.exit()
 
         plot = opts.plot
-        with ProcessPoolExecutor() as executor:
-            results = list(executor.map(
-                partial(rm_and_plot, opts=opts, plot=plot),
-                data_files
-            ))       
 
-        ##################################################
-        # Debug things, do not delete!!
-        ##################################################
-        
-        # for data_file in data_files:
-        #     rm_and_plot(data_file, opts)
-        
-        ##################################################
+        if opts.debug:
+            ##################################################
+            # Debug things, do not delete!!
+            ##################################################
+            for data_file in data_files:
+                rm_and_plot(data_file, opts, plot=plot)
+            
+        else:
+            with ProcessPoolExecutor() as executor:
+                results = list(executor.map(
+                    partial(rm_and_plot, opts=opts, plot=plot),
+                    data_files
+                ))       
 
+   
         # RMTF
         los = read_los_data(data_files[0], compress=False)
         phi_range = np.arange(-opts.max_fdepth, opts.max_fdepth+opts.depth_step,
                             opts.depth_step)
-        rmsf_orig = lambda_to_faraday(los.lambda_sq, phi_range, 1)
+        rmsf_orig = lambda_to_faraday(los.lambda_sq, phi_range, 1, derotate=opts.no_derotate)
         rmsf = dicto({"depths": phi_range, "rmtf": rmsf_orig})
 
         if opts.plot:

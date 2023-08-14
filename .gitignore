@@ -6,3 +6,6 @@ model_images
 
 *__pycache__*
 .vscode/*
+
+
+do-not-push/*

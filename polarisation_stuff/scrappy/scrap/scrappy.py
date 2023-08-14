@@ -252,10 +252,9 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
                   ))
 
 
-        ##################################################################
-        # Debug them
-        ##################################################################
-
+        # ##################################################################
+        # # Debug them
+        # ##################################################################
         # results = []
         # sds = make_syncd_data_stores(len(images), syncd=False) 
         # for chan, triplet in enumerate(images):
@@ -263,7 +262,7 @@ def make_per_region_data_output(images, reg_file, noise_file, threshold, noise_r
         #             cidx=chan, reg=reg, global_noise=global_noise,
         #             noise_reg=noise_reg, threshold=threshold))
 
-        ##################################################################
+        # ##################################################################
         
         # only accept if
         # 1. not all data is masked/flagged and
@@ -393,7 +392,6 @@ def main():
     ##########################################
     #  For regions
     ##########################################
-
     if opts.rfile is not None:
         snitch.info(f"Region file: {opts.rfile}")
         # copy custom region file to usual destination
@@ -460,7 +458,6 @@ def main():
 
     # For regions
     if opts.regions_only or "r" in todo and opts.rfile is None:
-
         step1_default_regions(reg_size, wcs_ref, bounds,
             threshold=threshold, rnoise=rnoise)
         step2_valid_reg_candidates(wcs_ref, noise_ref, threshold, rnoise=rnoise)

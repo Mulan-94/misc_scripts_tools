@@ -6,6 +6,8 @@ import subprocess
 from concurrent import futures
 from functools import partial
 
+import sys
+
 from ipdb import set_trace
 
 
@@ -159,10 +161,16 @@ def plot(dat, dat_rm, odir):
 
 
 def main():
-    weirdos = subprocess.check_output("ls -v weirdo-data/*.npz", shell=True)
+    if len(sys.argv) > 1:
+        lookup_dir = str(sys.argv[1])
+    else:
+        lookup_dir = "weirdo"
+    sstr = os.path.join(lookup_dir, "los-data", "*.npz")
+    weirdos = subprocess.check_output(f"ls -v {sstr}", shell=True)
     weirdos = weirdos.decode().split("\n")[:-1]
 
-    weirdos_rm = subprocess.check_output("ls -v weirdo-rm-data/*.npz", shell=True)
+    sstr = os.path.join(lookup_dir, "los-rm-data", "*.npz")
+    weirdos_rm = subprocess.check_output(f"ls -v {sstr}", shell=True)
     weirdos_rm = weirdos_rm.decode().split("\n")[:-1]
 
 
@@ -188,10 +196,8 @@ if __name__ == "__main__":
 
     python qu_pol/scrappy/rmsynthesis/rm_synthesis.py -id weirdo-s3/los-data -od weirdo-s3/los-rm-data -md 400 --depth-step 1 -np
 
-    ln -s weirdo-s3/los-data weirdo-data; 
-    ln -s weirdo-s3/los-rm-data weirdo-rm-data
 
-    python plt-script.py 
+    python plt-script.py weirdo-s3
 
     """
     main()

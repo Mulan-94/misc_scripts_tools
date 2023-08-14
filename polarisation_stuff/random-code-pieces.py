@@ -290,3 +290,140 @@ def linear_angular(z, d_linear=None, theta=None):
     return
 
 #--------------------------------------------------------------------------
+# revisiting channel selections
+
+scan4 = "3:5", "9:26", "41:56", "59:61", "72:74", 
+
+
+scan_full = "2:5", "9:26", "42:56", "60:61", "73:74"
+
+
+import numpy as np
+
+
+def unpack_select_chans(lst, oname="sel.txt"):
+    imgs = np.array([f"{_}".zfill(4) for _ in range(80)])
+    sel = []
+    for _ in lst:
+        if ":" in _:
+            start, stop = _.split(":")
+            start = int(start)
+            stop = int(stop) + 1
+            sel.extend(imgs[start:stop])
+        else:
+            sel.append(imgs[int(_)])
+
+    with open(oname, "w") as fil:
+        for _ in sel:
+            fil.writelines(f"{_}\n")
+    return sel
+
+
+def jy_per_beam_to_jy_per_arcsec2(imn):
+    """
+    Convert jy/beam to jy/arcsecond squared
+    """
+    #imn = "i-mfs.fits"
+    import astropy.units as u
+    from radio_beam import Beam
+    from astropy.io import fits
+
+    Beam.from_fits_header(imn)
+    beam = Beam.from_fits_header(imn)
+    beam.sr.to(u.arcsec**2)
+    beam.sr.to(u.arcsec**2).value
+
+
+
+
+
+#-------------------------------------------------------------------------------
+import numpy as np
+
+
+def create_selected_files(fname, oname, sel):
+    with open(fname, "r") as fil:
+        dat = fil.readlines()
+
+    regs = dat[:3]
+    for _ in sel:
+        regs.append(dat[_+2])
+
+    with open(oname, "w") as fil:
+        fil.writelines(regs)
+
+    return
+
+
+# from masked regions
+# regions showing double peaks
+doubles = {81,107,141,209,484,493,494,548,549,676,742,743,820,900,1039,1041,1362,1373,1430,1487,1489,1556,1563,1569,1632,1635,1705,1838}
+
+
+# regions showing weird looking multiple peaks
+weird_multi = {
+    55,179,180,228,232,233,234,296,297,355,420,485,486,547,558,610,611,612,623,625,626,680,691,747,748,820,885,886,887,904,905,1043,1044,1045,1046,1047,1432,1433,1501,1502,1503,1566,1567,1625,1626,1637,1638,1639,1707,1708,1709,1710,1841,1845
+}
+
+# regions showing smaller peaks on the side
+side_peaks = [
+    3,183,235,236,332,353,354,356,357,358,361,362,363,364,365,366,367,368,459,556,614,617,618,619,620,621,622,684,685,686,687,688,1378,1570,1571,1572,1711,1712,1714,1842,1843,1844,1892,1897,1898,1899,1900,1901,
+]
+
+
+# # regions showing noise
+noisy = [
+    45,432,497,560,584,590,627,648,656,693,694,765,829,831,841,895,896,964,1094,1393,1395,1912,1955,1962,1963,1964,1965,2006,2007,2120,2182,71,72,154,162,207,496,2034
+]
+
+create_selected_files(
+    "products/masked-scrap-outputs-s3/regions/regions-valid.reg",
+    "investigations/doubles.reg", doubles)
+
+create_selected_files(
+    "products/masked-scrap-outputs-s3/regions/regions-valid.reg",
+    "investigations/weird-doubles.reg", weird_multi)
+
+create_selected_files(
+    "products/masked-scrap-outputs-s3/regions/regions-valid.reg",
+    "investigations/side-peaks.reg", side_peaks)
+
+create_selected_files(
+    "products/masked-scrap-outputs-s3/regions/regions-valid.reg",
+    "investigations/noisy.reg", noisy)
+
+
+
+# 2,3,4,5,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,60,61,73,74
+
+
+################################################################################
+#I am calculating some lobe statistics
+#  spectral index
+################################################################################
+
+import numpy as np
+from astropy.io import fits
+
+def calculate_stats(image, mask):
+    data = np.squeeze(fits.getdata(image))
+    mask_data = np.squeeze(fits.getdata(mask)).astype(float)
+    mask_data = np.ma.masked_less(mask_data, 1)
+    mask_data = np.ma.filled(mask_data, np.nan)
+
+
+    masked = mask_data * data
+    
+    mean = np.nanmean(masked)
+    std = np.nanstd(masked)
+    print(f"mean: {mean:10.2}")
+    print(f"std :   {std:10.2}")
+    return
+
+
+lobes = os.path.join(os.environ["mask_dir"], "lobes.fits")
+elobe = os.path.join(os.environ["mask_dir"], "east-lobe.fits")
+wlobe = os.path.join(os.environ["mask_dir"], "west-lobe.fits")
+
+image = "products/spi-fitting/spi-map.alpha.fits"
+image_err = "products/spi-fitting/spi-map.alpha_err.fits"
