@@ -20,7 +20,64 @@ from utils.rmmath import (lambda_sq, frac_polzn, linear_polzn, linear_polzn_erro
     polarised_snr, frac_polzn_error, polzn_angle, polzn_angle_error)
 
 
-from ipdb import set_trace
+def read_fits_cube(name: str, mask=None, numpy=True, freqs=None, stokes="I"):
+    """
+    Returns an image item that contains the follwoing:
+    1. the image data (with mask applied if it has been provided)
+    2. The mask data itself (if mask was provided)
+    3. The image header information. Without the history.
+
+    name:
+        Input image name
+    mask:
+        Input mask name 
+    numpy: bool
+        Only active if a mask provided. This specifies that a numpy
+        mask should be retuned with the image (i.e valid regions are ones).
+        If set to False, an image mask will be returned instead. 
+        (i.e valid regions are zeroes)
+    freqs: arr
+
+    
+    Access these using the format: returned object.name|mask|header|freq
+    """
+    STOKES = {1: "I", 2: "Q", 3: "U", 4: "V"}
+
+    image = namedtuple("image", "")
+    
+    data = fits.getdata(name).squeeze()
+    image.header = fits.getheader(name)
+
+    if freqs is None:
+        # automatically figure out the freqency spacing
+        snitch.warning("No input frequencies were found. Automatically calculating from header")
+        image.freq = image.header["CRVAL3"] + \
+            np.arange(1, image.header["NAXIS3"]+1) * image.header["CDELT3"]
+    else:
+        # load with numpy if the freq is a string
+        image.freq = np.loadtxt(freqs) if isinstance(freqs, str) else freqs
+
+    image.chan_width = np.repeat(image.header["CDELT3"], image.freq.size)
+    if "CRVAL4" in image.header:
+        image.stokes = STOKES[int(image.header["CRVAL4"])]
+    else:
+        image.stokes = stokes
+
+    if "HISTORY" in image.header:
+        del image.header["HISTORY"]
+
+    if mask:
+        mask_data = read_fits_mask(mask)
+        if numpy:
+            image.mask = mask_data.numpy
+            data = np.ma.masked_array(data=data, mask=mask_data.numpy)
+        else:
+            image.mask = mask_data.image
+            data *= mask_data.image
+    image.data = data
+    return image
+
+
 
 def read_fits_image(name: str, mask=None, numpy=True):
     """
@@ -228,7 +285,7 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
 
     if isinstance(bounds, str):
         # reading this as an image because I want the valid areas
-        mask = read_fits_image(bounds).data
+        mask = read_fits_mask(bounds).numpy
        
         # label the different regions for tag
         label(mask, output=mask)
@@ -253,8 +310,10 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
     cords = product(ycoords, xcoords)
 
     world_coords = []
-
-    for y, x in cords:
+    for _c, (y, x) in enumerate(cords, 1):
+        if _c%300 == 0:
+            snitch.info(f"Patience. We are at {_c}")
+            
         if isinstance(bounds, str):
             if (y,x) not in mcords:
                 continue
@@ -268,7 +327,6 @@ def make_default_regions(bounds, size, wcs_ref, reg_file,
             "circle({:.6f}, {:.6f}, {:.6f}\") # tag={{{}}}".format(
         sky.center.ra.deg, sky.center.dec.deg, sky.radius.arcsec, tag)
         )
-    
     snitch.info(f"{len(world_coords)} regions found")
     # Write the regions out
     reg_file += f"-size-{size}-default"
@@ -392,11 +450,15 @@ def parse_valid_region_candidates(image, reg_file, noise_file, threshold,
 
 def image_noise(noise_reg, data):
     noise_data = read_region_data(noise_reg, data)
-
     if are_all_masked(noise_data) or are_all_nan(noise_data) or are_all_zeroes(noise_data):
         noise= np.nan
     else:
-        noise = rms(noise_data)
+        if noise_data.ndim >2:
+            noise = np.empty(noise_data.shape[0])
+            for i in range(noise.size):
+                noise[i] = rms(noise_data[i])
+        else:
+            noise = rms(noise_data)
     return noise
 
 
@@ -418,8 +480,18 @@ def read_region_data(reg, data):
         Data array of a given fits file
     """
     reg_mask = reg.to_mask()
-    weighted_data_cut = reg_mask.multiply(data)
+
+    if data.ndim>2:
+        # check if we use a mask
+        weighted_data_cut = []
+        for i in range(data.shape[0]):
+            weighted_data_cut.append(reg_mask.multiply(data[i]))
+        weighted_data_cut = np.array(weighted_data_cut)
+    else:
+        weighted_data_cut = reg_mask.multiply(data)
+
     weighted_data_cut = np.ma.masked_equal(weighted_data_cut,0)
+
     return weighted_data_cut
 
 
@@ -441,8 +513,16 @@ def region_flux_jybm(reg, data):
         #Using the center pixel
         # cpixx, cpixy = np.ceil(np.array(intense_cut.shape)/2).astype(int)
         # flux_jybm = intense_cut[cpixx, cpixy]
-        ban = intense_cut.compressed()
-        flux_jybm = ban[ban.size//2]
+        if intense_cut.ndim>2:
+            ban = intense_cut[0].compressed()
+            middle = ban.size//2
+            flux_jybm = np.empty(intense_cut.shape[0])
+            for i in range(intense_cut.shape[0]):
+                flux_jybm[i] = intense_cut[i].compressed()[middle]
+        else:
+            ban = intense_cut.compressed()
+            flux_jybm = ban[ban.size//2]
+
     return flux_jybm
 
 

@@ -14,7 +14,9 @@ class BespokeFormatter(argparse.RawDescriptionHelpFormatter):
 
 
 def parser():
-    parsing = argparse.ArgumentParser(usage="%(prog)s [options]", add_help=True,
+    parsing = argparse.ArgumentParser(
+        # usage="%(prog)s [options]",
+        add_help=True,
         formatter_class=BespokeFormatter,
         description="""
             Generate I, Q and U data for various LoS from image cubes.
@@ -58,8 +60,38 @@ def parser():
                 -rs 20 -t chosen --threshold 10
             """
         )
-
+    
+    reqopts = parsing.add_argument_group("Required arguments (supply only one, not both)")
     genopts = parsing.add_argument_group("General arguments")
+    regopts = parsing.add_argument_group("Region generation arguments")
+    losopts = parsing.add_argument_group("LoS Data generation arguments")
+    plot_parsing = parsing.add_argument_group("Plotting Arguments")
+
+    mexc_losopts = reqopts.add_mutually_exclusive_group(required=True)
+    mexc_losopts.add_argument("-idir", "--image_dir", dest="image_dir", type=str,
+        metavar=None,
+        help="Where the channelised I, Q and U images are")
+    mexc_losopts.add_argument("-cubes", "--cubes", dest="cubes", type=str,
+        metavar=None, nargs=3,
+        help="""The I, Q, U image cubes (in this specific order) to be used.
+        This will require specification of -- freq-file""")
+
+    
+    reqopts.add_argument("-ref-image", "--ref-image", dest="wcs_ref",
+        metavar=None, default=None, required=True,
+        help="""The reference image that will be used to generate the default
+        region file. Must be the stokes I MFS image. 
+        This image will also be used to get the reference WCS for region file
+        genenration. Default is a file named 'i-mfs.fits'
+        """)
+    reqopts.add_argument("-nri", "--noise-ref-image", dest="noise_ref",
+        metavar=None, default=None, required=True,
+        help="""The total intensity image used to get the noise reference.
+        Defaults to a file named 'i-mfs.fits'."""
+        )
+
+
+    
     parsing.add_argument("-todo", "--todo", dest="todo", 
         type=str, metavar="",
         help="""A string containing to do items. Specify using:
@@ -73,7 +105,7 @@ def parser():
     genopts.add_argument("-o", "-odir", "--output-dir", dest="odir", type=str,
         default=None, metavar="",
         help="where to dump output")    
-    genopts.add_argument("--threshold", dest="threshold", metavar="", type=int,
+    genopts.add_argument("-t", "--threshold", dest="threshold", metavar="", type=int,
         default=None,
         help="""If SNR below which data will not be considered. Default is 3""")
     genopts.add_argument("-j", "--nworkers", dest="nworkers", metavar="",
@@ -85,7 +117,6 @@ def parser():
 
     
 
-    regopts = parsing.add_argument_group("Region generation arguments")
     regopts.add_argument("-ro", "--regions-only", dest="regions_only",
         action="store_true", help="Only generate the region files")
     
@@ -93,18 +124,7 @@ def parser():
         type=float, default=None, metavar="", 
         help="""Specific noise floor to generate the regions.
         """)
-    regopts.add_argument("-ref-image", "--reference-image", dest="wcs_ref",
-        metavar="", default=None, required=True,
-        help="""Ther reference image that will be used to generate the default
-        region file. Must be the stokes I MFS image. 
-        This image will also be used to get the reference WCS for region file
-        genenration. Default is a file named 'i-mfs.fits'
-        """)
-    regopts.add_argument("-nri", "--noise-reference-image", dest="noise_ref",
-        metavar="", default=None, required=True,
-        help="""The total intensity image used to get the noise reference.
-        Defaults to a file named 'i-mfs.fits'."""
-        )
+    
     regopts.add_argument("-rf", "--region-file", dest="rfile", type=str,
         default=None, metavar="", 
         help="""An input region file. Otherwise, one will be auto-generated.
@@ -136,10 +156,11 @@ def parser():
 
 
 
-    losopts = parsing.add_argument_group("LoS Data generation arguments")
-    losopts.add_argument("-idir", "--image_dir", dest="image_dir", type=str,
-        metavar="", required=True,
-        help="Where the channelised I, Q and U images are")
+    losopts.add_argument("-freqs", "--freq-file", dest="freq_file", type=str,
+        metavar="",
+        help="""Text file containing frequencies to be used. This is only active 
+        when the input FITS images are cubes and is particularly useful when the 
+        frequencies of images that form the cube do not increase monotonically.""")
     losopts.add_argument("-lo", "--los-only", dest="los_only",
         action="store_true",
         help="Only generate the line of sight data files")
@@ -162,7 +183,6 @@ def parser():
   
     
     #plotting arguments  
-    plot_parsing = parsing.add_argument_group("Plotting Arguments")
     plot_parsing.add_argument("-po", "--plots-only", dest="plots_only",
         action="store_true", help="Only do plots")
     plot_parsing.add_argument("--plot-grid", dest="plot_grid",

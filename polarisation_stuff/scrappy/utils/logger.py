@@ -4,12 +4,16 @@ import warnings
 
 LOG_FORMATTER = logging.Formatter(
         datefmt='%H:%M:%S %d.%m.%Y',
+        fmt="%(asctime)s : %(message)s")
+
+WLOG_FORMATTER = logging.Formatter(
+        datefmt='%H:%M:%S %d.%m.%Y',
         fmt="%(asctime)s : %(levelname)s - %(message)s")
 
 def setup_filehandler(filename):
     l_handler = logging.FileHandler(filename, mode="w")
     l_handler.setLevel(logging.WARNING)
-    l_handler.setFormatter(LOG_FORMATTER)
+    l_handler.setFormatter(WLOG_FORMATTER)
     return l_handler
 
 def setup_streamhandler():
@@ -19,7 +23,7 @@ def setup_streamhandler():
     return s_handler
 
 
-def configure_logger(out_dir=None):
+def configure_logger(out_dir=None, level=None):
     # ignore overflow errors, assume these to be mostly flagged data
     warnings.simplefilter("ignore")
 
@@ -35,7 +39,11 @@ def configure_logger(out_dir=None):
     s_handler = setup_streamhandler()
 
     logger = logging.getLogger(__name__)
-    logger.setLevel(logging.INFO)
+
+    if level is not None:
+        logger.setLevel(level)
+    else:
+        logger.setLevel(logging.INFO)
 
     logger.addHandler(l_handler)
     logger.addHandler(s_handler)

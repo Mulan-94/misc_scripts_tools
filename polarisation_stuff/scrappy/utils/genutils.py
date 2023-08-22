@@ -1,5 +1,6 @@
 import os
 import sys
+import shutil
 from time import perf_counter
 
 import numpy as np
@@ -10,7 +11,11 @@ snitch = logging.getLogger(__name__)
 snitch.setLevel("INFO")
 snitch.addHandler(setup_streamhandler())
 
-def make_out_dir(dir_name):
+def make_out_dir(dir_name, delete_if_exists=False):
+    if os.path.isdir(dir_name) and delete_if_exists:
+        snitch.info(f"Deleting '{dir_name}' because it already exists")
+        shutil.rmtree(dir_name)
+        
     if not os.path.isdir(dir_name):
         snitch.info(f"Creating directory: {dir_name}")
         os.makedirs(dir_name)
@@ -60,12 +65,14 @@ def does_specified_file_exist(*args):
         if not os.path.isfile(fname):
             not_found.append(fname)
 
-    if len(not_found):
-        snitch.error("The following files are required but were not found:")
+    if len(not_found)>0:
+        snitch.error("The following files/dirs are required but were not found:")
         for fname in not_found:
             snitch.error(f"-> {fname}")
         snitch.error("Please ensure that they exist if intended for use")
         sys.exit()
+    else:
+        return True
     
 
 
