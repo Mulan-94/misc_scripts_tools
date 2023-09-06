@@ -11,13 +11,6 @@ from itertools import product
 from multiprocessing import Array
 from natsort import natsorted
 
-PATH = set(sys.path)
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), os.pardir))
-if not PATH.issuperset(PROJECT_ROOT):
-    sys.path.append(PROJECT_ROOT)
-
-
 from utils.genutils import fullpath, make_out_dir, does_specified_file_exist
 from utils.mathutils import (is_infinite, are_all_nan, nancount, are_all_zeroes,
     signal_to_noise)

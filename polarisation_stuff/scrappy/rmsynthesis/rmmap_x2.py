@@ -18,7 +18,6 @@ from multiprocessing import Pool
 from scipy import signal
 from concurrent import futures
 from functools import partial
-from ipdb import set_trace
 
 def configure_logger(out_dir):
 # ignore overflow errors, assume these to be mostly flagged data
@@ -472,7 +471,6 @@ def main():
     else:
         # test bedding
         for _v in xy:
-            set_trace()
             results.append(call_fitting(_v, wavelengths=wavelengths,
                 max_depth=args.max_depth,
                     niters=args.niters, phi_step=args.depth_step,

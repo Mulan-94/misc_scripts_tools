@@ -14,7 +14,6 @@ from bokeh.models import (ColumnDataSource, Whisker, Line, Circle, Range1d,
         LinearAxis, DataRange1d, Panel, Tabs, Legend, LegendItem,
         HoverTool)
 from bokeh.plotting import figure
-from ipdb import set_trace
 
 AMP_COLOUR = "#21317B"
 IMAG_COLOUR = "#202221"
@@ -273,8 +272,7 @@ def ragavi(los, i_dir, yaml_plots, o_dir):
     return
 
 
-if __name__ == "__main__":
-
+def main():
     opts = arg_parser().parse_args()
     print("Starting bokeh plots")
 
@@ -301,3 +299,12 @@ if __name__ == "__main__":
                     partial(ragavi, i_dir=i_dir, yaml_plots=yaml_plots,
                             o_dir=o_dir),
                     files))
+
+
+def console():
+    """A console run entry point for setup.cfg"""
+    main()
+    # snitch.info("Bye :D !")
+
+if __name__ == "__main__":
+    console()

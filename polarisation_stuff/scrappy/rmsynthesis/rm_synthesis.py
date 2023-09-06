@@ -17,17 +17,9 @@ from scipy import signal
 from concurrent import futures
 from functools import partial
 
-PATH = set(sys.path)
-PROJECT_ROOT = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), os.pardir))
-if not PATH.issuperset(PROJECT_ROOT):
-    sys.path.append(PROJECT_ROOT)
-
 from utils.genutils import fullpath, make_out_dir, dicto
 from utils.logger import logging, LOG_FORMATTER, setup_streamhandler
 from utils.rmmath import lambda_sq
-
-from ipdb import set_trace
 
 snitch = logging.getLogger(__name__)
 snitch.addHandler(setup_streamhandler())

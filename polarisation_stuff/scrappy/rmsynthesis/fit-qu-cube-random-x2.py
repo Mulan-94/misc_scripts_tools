@@ -21,7 +21,6 @@ if not PATH.issuperset(PROJECT_ROOT):
     sys.path.append(PROJECT_ROOT)
 
 from utils.genutils import dicto, read_npz
-from ipdb import set_trace
 
 # Make syncronised data store and reused data stores global for easier use
 global SDS, RDS
@@ -240,7 +239,7 @@ def call_fitting(x, y):
     fpol0 = pmax[x, y]
 
     # calling the model with the initial max fpol, intial RM guess and the polarisation angle
-    set_trace()
+    # set_trace()
 
     fit_residual = call_model(p0=fpol0, PA=theta, RM=rm,
         RM_min=-1000, RM_max=1000, 
