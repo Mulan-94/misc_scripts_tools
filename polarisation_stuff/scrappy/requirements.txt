@@ -1,6 +1,9 @@
 astropy
-numpy
 regions
+numpy
 matplotlib
+natsort
+scipy
+bokeh
 # when needed
 # casatasks

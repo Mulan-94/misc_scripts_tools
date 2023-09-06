@@ -65,9 +65,15 @@ def faraday_to_lambda(lam2, phi_range, pol_lam2):
 
 
 
-def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
+def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1, derotate=True):
 
-    fwhm = (3.8/ abs(lam2[0]-lam2[-1]))
+    if derotate:
+        fwhm = (3.8/ abs(lam2[0]-lam2[-1]))
+    else:
+        # use the peak of the real component for the gaussian as the CLEAN beam
+        # according to rudnick and cotton 2023
+        fwhm = 2 / (lam2[-1]+lam2[0])
+
     sigma = (fwhm/2.35482)
     Gauss = np.exp(-0.5 * (phi_range/sigma)**2) 
 
@@ -87,7 +93,7 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
         ind = np.where(f_amp == f_amp.max())[0]
         f_comp = fspectrum[ind[0]] * gain
         temp[ind[0]] = f_comp
-        components += temp         
+        components += temp
     
         dirac = np.zeros(len(phi_range))
         dirac[ind[0]] = 1
@@ -99,10 +105,10 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1):
     Fres = fspectrum
     fclean = signal.convolve(components, Gauss, mode='same') + Fres
 
-    return fclean, components
+    return fclean, components, fwhm
 
 
-def rm_synthesis(lam, pdata, phi_max=500, phi_step=5, niter=1000, gain=0.1, plot=False):
+def rm_synthesis(lam, pdata, phi_max=500, phi_step=5, niter=1000, gain=0.1, plot=False, derotate=True):
 
 
     phi_range =  np.arange(-phi_max, phi_max+phi_step, phi_step)
@@ -110,11 +116,11 @@ def rm_synthesis(lam, pdata, phi_max=500, phi_step=5, niter=1000, gain=0.1, plot
     fdirty = faraday_to_lambda(lam, phi_range, pdata)
     
     
-    fclean, fcomp = rm_clean(lam, phi_range, fdirty, 
-                    niter=niter, gain=gain)
+    fclean, fcomp, fwhm = rm_clean(lam, phi_range, fdirty, 
+                    niter=niter, gain=gain, derotate=derotate)
 
 
-    return phi_range, fclean
+    return phi_range, fclean, fdirty, fwhm
 
 
 
@@ -136,7 +142,101 @@ def read_data(image, freq=True):
         sys.exit('>>> could not load %s. Aborting...'%image)
 
 
-def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
+#-==========================================================================
+# some RM noise stuff
+#-==========================================================================
+def rmtools_median_abs_dev(a, c=0.6745, axis=None):
+    """
+    Median Absolute Deviation along given axis of an array:
+    median(abs(a - median(a))) / c
+    c = 0.6745 is the constant to convert from MAD to std
+    """
+    
+    a = np.ma.masked_where(a!=a, a)
+    if a.ndim == 1:
+        d = np.ma.median(a)
+        m = np.ma.median(np.ma.fabs(a - d) / c)
+    else:
+        d = np.ma.median(a, axis=axis)
+        if axis > 0:
+            aswp = np.ma.swapaxes(a,0,axis)
+        else:
+            aswp = a
+        m = np.ma.median(np.ma.fabs(aswp - d) / c, axis=0)
+
+    return m
+
+
+def median_abs_dev(arr):
+    """median Absolute Deviation"""
+    mad = np.nanmedian(np.abs(arr - np.nanmean(arr)))
+    return mad
+
+def mean_abs_dev(arr):
+    """Mean Absolute Deviation (MAD) statistic """
+    mad = np.nansum(np.abs(arr - np.nanmean(arr))) / arr.size
+    return mad
+
+def root_mean_square(arr):
+    rms = np.sqrt(np.nanmean(np.square(arr)))
+    return rms
+    
+
+def peak_snr(fdf, rmsf_fwhm, phi_range):
+    """
+    With individual noise for Q and U because they are not the same
+
+    1. Get the complex FDF
+    2. Get its amplitudeqlq
+    3. get index of at peak amplitude
+    4. Get peak amplitude
+    5. mask the THE WIDTH of the FDF peak
+    6. select all the unmasked, and remaining values of the absolute FDF
+    7. if fraction of data remaining is less than 30%, ie if more 70pc of the data is flagged:
+            - MAD
+            - RMS of the unflagged fdf
+        otherwise, using the flagged data:
+            - MAD
+            - RMS to generate the noise
+
+        This will give the fdf noise
+    8. snr is therefore peak fdf to this noise
+    """
+    fdf_amp = np.abs(fdf)
+    
+    max_peak = np.max(fdf_amp)
+    max_peak_loc = np.nanargmax(fdf_amp[1:-1])
+
+    # find the phi range where the main rmsf peak is located
+    phi_delta = np.nanmin(np.diff(phi_range))
+    
+    rmsf_fwhm_channel = np.ceil(rmsf_fwhm/phi_delta)
+    rmsf_width_start = int(max(0, max_peak_loc - rmsf_fwhm_channel*2))
+    rmsf_width_end = int(max(0, max_peak_loc + rmsf_fwhm_channel*2))
+
+    flagged_fdf_amp = np.copy(fdf_amp)
+    flagged_fdf_amp[rmsf_width_start: rmsf_width_end] = np.nan
+    flagged_fdf_amp = np.ma.masked_invalid(flagged_fdf_amp).compressed()
+
+    if flagged_fdf_amp.size / fdf_amp.size < 0.3:
+        rms = root_mean_square(fdf_amp)
+        mad = median_abs_dev(fdf_amp)
+        # mad = rmtools_median_abs_dev(fdf_amp)
+    else:
+        rms = root_mean_square(flagged_fdf_amp)
+        mad = median_abs_dev(flagged_fdf_amp)
+        # mad = rmtools_median_abs_dev(flagged_fdf_amp)
+
+    # signal to noise here
+    snr = max_peak/mad
+
+    return snr
+
+#-==========================================================================
+
+
+
+def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1, derotate=True):
     """
     Returns
 
@@ -170,8 +270,14 @@ def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
     wave_sq =  wavelengths[ind_nans]
 
     # RM-synth and RM-CLEAN on this single pixel. We pass in the complex polarised data
-    phi_range, fcleaned = rm_synthesis(wave_sq, single_pxl_poln, phi_max=max_depth,
-        phi_step=phi_step, niter=niters, gain=0.1, plot=False) 
+    phi_range, fcleaned, fdirty, fwhm = rm_synthesis(wave_sq, single_pxl_poln,
+        phi_max=max_depth, phi_step=phi_step, niter=niters, gain=0.1, plot=False, derotate=derotate) 
+    
+    snr_clean = peak_snr(fcleaned, fwhm, phi_range)
+    # snr_dirty = peak_snr(fdirty, fwhm, phi_range)
+    # return nans for pixel if snr is less than 10
+    # if snr_clean < 10:
+    #     return [np.nan]*6 + [snr_clean]
 
     abs_fclean = np.abs(fcleaned)
 
@@ -203,7 +309,7 @@ def call_fitting(args, wavelengths=None, max_depth=500, niters=100, phi_step=1):
     # take fpol at the highest frequency
     peak_fpol = nfp[-1]
     
-    return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol, peak_lpol
+    return peak_rm_amp, pol_angle, peak_depth, abs(fcleaned), peak_fpol, peak_lpol, snr_clean
 
 
 def modify_fits_header(header, ctype='RM', unit='rad/m/m'):
@@ -268,9 +374,15 @@ def arg_parser():
     add("-niters", "--niters", dest="niters",
         help="Number of clean iterations. Default 1000", default=1000, type=int)
     add("-md", "--max-depth", dest="max_depth",
-        help="Maximum Farady depth to fit for. Default 500", default=500, type=int)
+        help="Maximum Farady depth to fit for. Default 200", default=200, type=int)
     add("--depth-step", dest="depth_step",
         help="Depth stepping. Default 1", default=1, type=int)
+    add('-debug', '--debug', dest='debug', action="store_true",
+        help='Enable debug mode, disable parallel processing') 
+    add('-snr', '--snr-threshold', dest='snr', type=float, default=10,
+        help='Threshold to mask out data. Default is 10')
+    add("-nd", "--no-derotate", dest="no_derotate", action="store_false",
+        help="Use this switch to NOT derotate the RMTF by the mean lambda squared.")
    
     return parser.parse_args()
 
@@ -280,10 +392,11 @@ def main():
 
     # making these global because of multiprocess non-sharing.
     # Global variables can not be modified and shared between different processes
-    global pdata, fp_data, snitch
+    global pdata, fp_data, snitch, snr
 
     snitch = configure_logger(".")
     
+    snr = args.snr
     try:
         frequencies = np.loadtxt(args.freq)
     except ValueError:
@@ -295,59 +408,14 @@ def main():
     qdata, qhdr = read_data(args.qfits) # run Q-cube 
     udata, _ = read_data(args.ufits) # run U-cube
 
-    pdata = qdata + 1j*udata
-
     if args.ifits:
         idata, ihdr = read_data(args.ifits) # run I-cube
-        fp_data = np.abs(pdata) / idata
-
- 
-    N1, N2, N3 = qdata.shape
-    p0_map = np.zeros([N2, N3])
-    PA_map = np.zeros([N2, N3])
-    RM_map = np.zeros([N2, N3])
-    fp_map = np.zeros([N2, N3])
-    lp_map = np.zeros([N2, N3])
-
-    
-    #q_cube = np.zeros([N1, N2, N3])
-    #u_cube = np.zeros([N1, N2, N3])
-
-    if args.maskfits:
-        x, y = read_mask(args.maskfits)
-    
+        fp_data = (qdata/idata )+ 1j*(udata/idata)
+        fp_data = np.abs(fp_data)
     else:
-        x, y = np.indices((N2, N3))
-        x = x.flatten()
-        y = y.flatten()
-
-
-    xy = list(zip(x, y))
-
-    results = []
-    with futures.ProcessPoolExecutor(args.numProcessor) as executor:
-        results = executor.map(
-            partial(
-                call_fitting,wavelengths=wavelengths, max_depth=args.max_depth,
-                niters=args.niters, phi_step=args.depth_step), 
-            xy)
-
-    # # test bedding
-    # for _v in xy:
-    #     results.append(call_fitting(_v, wavelengths=wavelengths))
-
+        pdata = qdata + 1j*udata
     
-    results = list(results)
-    for _, an in enumerate(xy):        
-        # # making new pixels with the new the poln angle and the
-        p0_map[an] = results[_][0]
-        PA_map[an] = results[_][1]
-        RM_map[an] = results[_][2]
-        fp_map[an] = results[_][4]
-        lp_map[an] = results[_][5]
 
-    
-    
     # now save the fits
     # clean the header a little
     qhdr = clean_header(qhdr)
@@ -366,6 +434,62 @@ def main():
 
     # polarise intensity
     lp_hdr = modify_fits_header(qhdr, ctype='LPOL', unit='unit')
+
+    snr_hdr = modify_fits_header(qhdr, ctype='SNR', unit='unit')
+     
+    N1, N2, N3 = qdata.shape
+    p0_map = np.zeros([N2, N3])
+    PA_map = np.zeros([N2, N3])
+    RM_map = np.zeros([N2, N3])
+    fp_map = np.zeros([N2, N3])
+    lp_map = np.zeros([N2, N3])
+    snr_clean = np.zeros([N2, N3])
+
+    
+    #q_cube = np.zeros([N1, N2, N3])
+    #u_cube = np.zeros([N1, N2, N3])
+
+    if args.maskfits:
+        x, y = read_mask(args.maskfits)
+    
+    else:
+        x, y = np.indices((N2, N3))
+        x = x.flatten()
+        y = y.flatten()
+
+
+    xy = list(zip(x, y))
+
+    results = []
+
+    if not args.debug:
+        with futures.ProcessPoolExecutor(args.numProcessor) as executor:
+            results = executor.map(
+                partial(
+                    call_fitting,wavelengths=wavelengths, max_depth=args.max_depth,
+                    niters=args.niters, phi_step=args.depth_step, derotate=opts.no_derotate), 
+                xy)
+    else:
+        # test bedding
+        for _v in xy:
+            set_trace()
+            results.append(call_fitting(_v, wavelengths=wavelengths,
+                max_depth=args.max_depth,
+                    niters=args.niters, phi_step=args.depth_step,
+                    derotate=opts.no_derotate))
+
+    
+    results = list(results)
+    for _, an in enumerate(xy):        
+        # # making new pixels with the new the poln angle and the
+        p0_map[an] = results[_][0]
+        PA_map[an] = results[_][1]
+        RM_map[an] = results[_][2]
+        fp_map[an] = results[_][4]
+        lp_map[an] = results[_][5]
+        snr_clean[an] = results[_][6]
+   
+    
 
     # Amplitude of the clean peak RM (intrinsic fpol)
     pyfits.writeto(
@@ -391,6 +515,11 @@ def main():
         args.prefix + '-max-LPOL.fits', lp_map, lp_hdr,
         overwrite=True)
 
+    #SNR from the FDF
+    pyfits.writeto(
+        args.prefix + '-clean-fdf-SNR.fits', snr_clean, snr_hdr,
+        overwrite=True)
+
     snitch.info("Donesies!")
 
     #pyfits.writeto(args.prefix + '-qFAR.fits', q_cube, qhdr, overwrite=True)
@@ -398,10 +527,14 @@ def main():
 
 
 
+def console():
+    """A console run entry point for setup.cfg"""
+    main()
+    snitch.info("Bye :D !")
 
 if __name__=='__main__':
 
-    main()
+    console()
 
 
     """

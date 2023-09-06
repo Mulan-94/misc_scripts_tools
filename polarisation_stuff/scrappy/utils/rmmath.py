@@ -77,18 +77,20 @@ def polzn_angle_error(q, u, q_err, u_err):
 
 def rm_error(pangle_err: float, lam_sq_err: float, n_chans: int):
     """Equation 52 and 53"""
-    err_rm = pangle_err \
-            / (lam_sq_err * np.sqrt(n_chans - 2))
+    err_rm = pangle_err / (lam_sq_err * np.sqrt(n_chans - 2))
     return err_rm
 
 def frac_polzn(i, q, u):
+    """
+    Note that the input q, u are not fractional at this point
+    """
     # linear fractional polarisation
-    frac_pol = np.abs(linear_polzn(q, u)) / i
+    frac_pol = np.abs(linear_polzn(q/i, u/i))
     return frac_pol
 
 def frac_polzn_error(i, q, u, i_err, q_err, u_err):
     fpol = frac_polzn(i, q, u)
-    p = np.abs(linear_polzn(q, u))
+    p = np.abs(linear_polzn(q/i, u/i))
     p_err = linear_polzn_error(q, u, q_err, u_err)
     res = np.abs(fpol) * np.sqrt(np.square((p_err/p)) + np.square((i_err/i)))
     return res

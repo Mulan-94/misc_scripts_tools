@@ -10,9 +10,11 @@ from glob import glob
 from copy import deepcopy
 
 import matplotlib.pyplot as plt
+import matplotlib.gridspec as gridspec
 import numpy as np
+
 from scipy import signal
-from concurrent.futures import ProcessPoolExecutor
+from concurrent import futures
 from functools import partial
 
 PATH = set(sys.path)
@@ -31,13 +33,7 @@ snitch = logging.getLogger(__name__)
 snitch.addHandler(setup_streamhandler())
 snitch.setLevel("INFO")
 
-# import matplotlib
-# matplotlib.rcParams.update({'font.size':18, 'font.family':'DejaVu Sans'})
-# matplotlib.use('Agg') 
-# plt.style.use("seaborn")
-# FIGSIZE = (16,9)
-# for publication
-FIGSIZE = (10,5)
+FIGSIZE = (10,10)
 get_wavel = lambda x: 3e8/x
 lw = 1.2
 
@@ -130,100 +126,6 @@ def rm_clean(lam2, phi_range, fspectrum, niter=500, gain=0.1, derotate=True):
     Fres = fspectrum
     fclean = signal.convolve(components, Gauss, mode='same') + Fres
     return fclean, components, rmsf_orig
-
-
-def lexy_rm_clean(lambdas, phi_range, dirty_spectrum, n_iterations=500, loop_gain=0.1, threshold=None):
-
-    minmax = lambda x: (x.min(), x.max())
-    residuals = dirty_spectrum.copy() 
-    clean_components = np.zeros_like(dirty_spectrum)
-
-    for n in range(n_iterations):
-        # if the noise in the residuals has reached the threshold stop the loop
-        # snitch.info("Iteration ", n)
-
-        if threshold is not None:
-            if residuals.std() <= threshold:
-                break
-        
-        # Find location of peak in dirty spectrum/
-        # peak_loc = np.where(residuals==np.max(residuals))
-        peak_loc = np.argmax(np.abs(residuals))
-        
-        # scale real and imagiary by loop gain
-        fraction = residuals[peak_loc] * loop_gain
-        clean_components[peak_loc] += fraction
-
-        #shift and scale
-        step = np.abs(phi_range[0]-phi_range[1])
-        padding = phi_range.size//2
-        edge = phi_range.max() + (padding * step) + step
-        padded_phi_range = np.arange(-edge, edge, step)
-        padded_rmsf = lambda_to_faraday(lam2, padded_phi_range, 1)
-        delta = np.zeros_like(phi_range)
-        delta[peak_loc] = 1
-
-        ## shifting
-        rmtf = signal.convolve(padded_rmsf, delta, mode="same")[padding+1:-padding]
-
-        ## scaling
-        nrmsf = rmtf*fraction
-
-        # subtract scaled and shifted rmtf from whatever is there
-        residuals -= nrmsf
-
-
-    # should be a gaussian with FWHM same as the rmtf main lobe
-    fwhm = get_rmsf_fwhm(None, None, lambdas=minmax(lambdas))
-    
-    # FWHM of a gaussian is sigma * ((8ln2)^0.5)
-    sigma = fwhm / np.sqrt(8 * np.log(2))
-    restoring_beam = np.exp(-0.5 * (phi_range/sigma)**2) 
-
-    restored = signal.convolve(clean_components, restoring_beam, mode="same")
-    restored += residuals
-
-    # # if n%500 == 0:
-    fig, ax = plt.subplots(nrows=3,ncols=2, figsize=FIGSIZE)
-    ax[0, 0].plot(phi_range, np.abs(dirty_spectrum), "b--", label="Dirty")
-    ax[0, 0].legend()
-    
-    ax[0, 1].plot(phi_range, np.abs(residuals), "y-", label="residuals")
-    ax[0, 1].axvline(phi_range[peak_loc], color="orangered", linestyle="--")
-    ax[0, 1].axhline(np.abs(residuals[peak_loc]), color="orangered", linestyle="--")
-    ax[0, 1].legend()
-
-    ax[1, 0].plot(phi_range, np.abs(clean_components), "k-", label="cleans")
-    ax[1, 0].legend()
-    
-    ax[1, 1].plot(phi_range, np.abs(rmtf), label="rmtf")
-
-    az = ax[1, 1].twinx()
-    az.plot(phi_range, np.abs(nrmsf), "r:", label="Scaled rmtf")
-    az.set_ylabel("Scaled", color="red")
-    az.tick_params(axis="y", labelcolor="red")
-    ax[1, 1].legend()
-
-
-    ax[2, 0].plot(phi_range, np.abs(restored), label="Restored + residuals")
-    ax[2, 0].legend()
-
-    fig.suptitle(f"Iteration {n}")
-    fig.tight_layout()
-    
-    return restored
-
-
-def plot_data(lam, plam, phi, fphi):
-    fig, (ax, ay) = plt.subplots(1, 2, figsize=FIGSIZE)
-    ax.plot(lam, abs(plam), 'b.')
-    ax.set_xlabel('Wavelength [m$^2$]')
-    ax.set_ylabel('Fractional Polarization')
-          
-    ay.plot(phi, abs(fphi), 'b')
-    ay.set_xlabel('Faraday Depth [rad m$^{-2}$]')
-    ay.set_ylabel('Faraday Spectrum')
-    plt.tight_layout()
 
 
 def rm_synthesis(lambda_sq, lpol, phi_max=600, phi_step=10, niter=1000, gain=0.1,
@@ -346,7 +248,7 @@ def read_los_data(filename, compress=True):
                 data=value, mask=mask).compressed()
 
     if "lpol" not in losdata:
-        losdata["lpol"] = losdata["Q"] + 1j*losdata["U"]
+        losdata["lpol"] = losdata["Q"]/losdata["I"] + 1j*(losdata["U"]/losdata["I"])
     losdata["reg_num"] = reg_num
     losdata = dicto(losdata)
 
@@ -361,11 +263,10 @@ def write_out_rmsynthesis_data(data, idir, depth, odir=None):
     if odir is None:
         odir = os.path.abspath(idir)
     # odir += f"-depths-{depth}"
-    odir = make_out_dir(odir)
 
     ofile = fullpath(odir, f"reg_{data.reg_num}")
     np.savez(ofile, **data)
-    snitch.info(f"Saved data to: {ofile}")
+    snitch.info(f"Saved data to: {os.path.relpath(ofile, '.')}")
     
     return ofile
 
@@ -380,12 +281,17 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
         ofile += ".png"
 
     plt.close("all")
-    fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
+    # fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
+    fig, ax = plt.subplot_mosaic([['top left', 'top right'],
+                                  ['bot', 'bot']],
+        figsize=FIGSIZE, gridspec_kw={"wspace":0})
 
-    ax[0].errorbar(los.lambda_sq, los.fpol, yerr=los.fpol_err, 
+    ax["top left"].errorbar(los.lambda_sq, los.fpol, yerr=los.fpol_err, 
                     fmt='o', ecolor="red")
-    ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-    ax[0].set_ylabel('Fractional Polarisation')
+    ax["top left"].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+    ax["top left"].set_ylabel('Fractional Polarisation')
+    ax["top left"].minorticks_on()
+    
 
     
     los.pangle = np.unwrap(los.pangle, period=np.pi, discont=np.pi/2)
@@ -394,88 +300,31 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     reg_line = np.poly1d(res)(los.lambda_sq)
     
     # ax[1].plot(los.lambda_sq, los.pangle, "r+", label="original")
-    ax[1].errorbar(los.lambda_sq, los.pangle, yerr=los.pangle_err,
+    ax["top right"].errorbar(los.lambda_sq, los.pangle, yerr=los.pangle_err,
                     fmt='o', ecolor="red", label="unwrapped angle")
-    ax[1].plot(los.lambda_sq, reg_line, "g--",
+    ax["top right"].plot(los.lambda_sq, reg_line, "g--",
         label=f"linear fit, slope: {res[0]:.3f}", lw=lw)
-    ax[1].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-    ax[1].set_ylabel('Polarisation Angle')
-    ax[1].legend()
-
+    ax["top right"].set_xlabel('$\lambda^2$ [m$^{-2}$]')
+    ax["top right"].set_ylabel('Polarisation Angle')
+    ax["top right"].legend()
+    ax["top right"].minorticks_on()
+    ax["top right"].tick_params(axis='y', which="both", labelright=True, 
+        labelleft=False, left=False, right=True)
+    ax["top right"].yaxis.set_label_position("right")
 
     fclean = np.abs(los_rm.fclean)
     rm_val = los_rm.depths[np.argmax(fclean)]
 
-    ax[2].plot(los_rm.depths, np.abs(los_rm.fdirty),
+    ax["bot"].plot(los_rm.depths, np.abs(los_rm.fdirty),
                 'r--', label='Dirty Amp')
     if "fclean" in los_rm:
-        ax[2].plot(los_rm.depths, fclean, 'k',
+        ax["bot"].plot(los_rm.depths, fclean, 'k',
             label=f'Clean Amp, RM {rm_val:.2f}')
-        # ax[2].axvline(rm_val, label=f"{rm_val:.3f}")
-    ax[2].set_xlabel('Faraday depth [rad m$^{-2}$]')
-    ax[2].set_ylabel('Farady Spectrum')
-    ax[2].legend(loc='best')
-
-    # if "snr" in los:
-    #     snr_idx = np.argmax(los.snr)
-    #     fig.suptitle(
-    #         # f"(||P|| : P$_{{err}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
-    #         f"(I$_{{los}}$ : I$_{{global\_rms}}$) SNR$_{{max}}$ = {np.max(los.snr):.2f} " +
-    #         f"@ chan = {los.freqs[snr_idx]/1e9:.2f} GHz " +
-    #         f"and $\lambda^{{2}}$ = {los.lambda_sq[snr_idx]:.2f}")
-    fig.tight_layout()
-    fig.savefig(ofile)
-    
-    snitch.info(f"Saved Plot at: {ofile}")
-    return ofile
-
-
-
-def plot_los_rmdata(los, los_rm, losdata_fname):
-    odir = os.path.dirname(losdata_fname) 
-    odir = make_out_dir(odir+"-plots")
-    ofile = fullpath(odir, f"reg_{los.reg_num}")
-    if los.tag is not None:
-        ofile += f"-{los.tag}.png"
-    else:
-        ofile += ".png"
-
-    plt.close("all")
-    fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
-
-    ax[0].errorbar(los.lambda_sq, los.fpol, yerr=los.fpol_err, 
-                    fmt='o', ecolor="red")
-    ax[0].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-    ax[0].set_ylabel('Fractional Polarisation')
-
-    
-    los.pangle = np.unwrap(los.pangle, period=np.pi, discont=np.pi/2)
-    # linear fitting
-    res = np.ma.polyfit(los.lambda_sq, los.pangle, deg=1)
-    reg_line = np.poly1d(res)(los.lambda_sq)
-    
-    # ax[1].plot(los.lambda_sq, los.pangle, "r+", label="original")
-    ax[1].errorbar(los.lambda_sq, los.pangle, yerr=los.pangle_err,
-                    fmt='o', ecolor="red", label="unwrapped angle")
-    ax[1].plot(los.lambda_sq, reg_line, "g--",
-        label=f"linear fit, slope: {res[0]:.3f}", lw=lw)
-    ax[1].set_xlabel('$\lambda^2$ [m$^{-2}$]')
-    ax[1].set_ylabel('Polarisation Angle')
-    ax[1].legend()
-
-
-    fclean = np.abs(los_rm.fclean)
-    rm_val = los_rm.depths[np.argmax(fclean)]
-
-    ax[2].plot(los_rm.depths, np.abs(los_rm.fdirty),
-                'r--', label='Dirty Amp')
-    if "fclean" in los_rm:
-        ax[2].plot(los_rm.depths, fclean, 'k',
-            label=f'Clean Amp, RM {rm_val:.2f}')
-        # ax[2].axvline(rm_val, label=f"{rm_val:.3f}")
-    ax[2].set_xlabel('Faraday depth [rad m$^{-2}$]')
-    ax[2].set_ylabel('Farady Spectrum')
-    ax[2].legend(loc='best')
+        # ax["bot"].axvline(rm_val, label=f"{rm_val:.3f}")
+    ax["bot"].set_xlabel('Faraday depth [rad m$^{-2}$]')
+    ax["bot"].set_ylabel('Farady Spectrum')
+    ax["bot"].legend(loc='best')
+    ax["bot"].minorticks_on()
 
     if "snr" in los:
         snr_idx = np.argmax(los.snr)
@@ -487,7 +336,7 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     fig.tight_layout()
     fig.savefig(ofile)
     
-    snitch.info(f"Saved Plot at: {ofile}")
+    snitch.info(f"Saved Plot at: {os.path.relpath(ofile, '.')}")
     return ofile
 
 
@@ -512,7 +361,7 @@ def plot_rmtf(los_rm, rmplot_name):
     fig.savefig(ofile, dpi=300)
     snitch.info(f"Saved RMTF plot to: {ofile}")
 
-def rm_and_plot(data_dir, opts=None, plot=True):
+def rm_and_plot(data_dir, opts=None, plot=True, odir=None):
     los = read_los_data(data_dir)
     if los.lambda_sq is None:
         los.lambda_sq = lambda_sq(los.freqs, los.chan_width)
@@ -523,9 +372,9 @@ def rm_and_plot(data_dir, opts=None, plot=True):
     
     rmout["reg_num"] = los.reg_num
     rmout["tag"] = los.tag or ""
-    
+
     losdata_fname = write_out_rmsynthesis_data(rmout, idir=data_dir,
-        depth=opts.max_fdepth, odir=opts.output_dir)
+        depth=opts.max_fdepth, odir=odir)
     
     #plotting everything
     if plot:
@@ -550,17 +399,19 @@ def main():
 
         plot = opts.plot
 
+        odir = make_out_dir(opts.output_dir)
+
         if opts.debug:
             ##################################################
             # Debug things, do not delete!!
             ##################################################
             for data_file in data_files:
-                rm_and_plot(data_file, opts, plot=plot)
+                rm_and_plot(data_file, opts, plot=plot, odir=odir)
             
         else:
-            with ProcessPoolExecutor() as executor:
+            with futures.ProcessPoolExecutor(max_workers=10) as executor:
                 results = list(executor.map(
-                    partial(rm_and_plot, opts=opts, plot=plot),
+                    partial(rm_and_plot, opts=opts, plot=plot, odir=odir),
                     data_files
                 ))       
 
@@ -575,6 +426,12 @@ def main():
         if opts.plot:
             plot_rmtf(rmsf, results[0])
     return
-    
-if __name__ == "__main__":
+
+
+def console():
+    """A console run entry point for setup.cfg"""
     main()
+    snitch.info("Bye :D !")
+
+if __name__ == "__main__":
+    console()
