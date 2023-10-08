@@ -275,7 +275,7 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     plt.close("all")
     # fig, ax = plt.subplots(figsize=FIGSIZE, ncols=3)
     fig, ax = plt.subplot_mosaic([['top left', 'top right'],
-                                  ['bot', 'bot']],
+                                  ['bot left', 'bot']],
         figsize=FIGSIZE, gridspec_kw={"wspace":0})
 
     ax["top left"].errorbar(los.lambda_sq, los.fpol, yerr=los.fpol_err, 
@@ -284,6 +284,13 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     ax["top left"].set_ylabel('Fractional Polarisation')
     ax["top left"].minorticks_on()
     
+    # ax["bot left"].plot(los.lambda_sq, los.I, label="I")
+    ax["bot left"].plot(los.lambda_sq, los.Q, label="Q")
+    ax["bot left"].plot(los.lambda_sq, los.U, label="U")
+    ax["bot left"].plot(los.lambda_sq, np.abs(los.Q + 1j*los.U), label="amp", color="k")
+    # ax["bot left"].plot(los.lambda_sq, np.abs((los.Q/los.I) + (1j*los.U/los.I)), label="fp", color="r")
+    ax["bot left"].minorticks_on()
+    ax["bot left"].legend()
 
     
     los.pangle = np.unwrap(los.pangle, period=np.pi, discont=np.pi/2)
@@ -317,6 +324,9 @@ def plot_los_rmdata(los, los_rm, losdata_fname):
     ax["bot"].set_ylabel('Farady Spectrum')
     ax["bot"].legend(loc='best')
     ax["bot"].minorticks_on()
+    ax["bot"].tick_params(axis='y', which="both", labelright=True, 
+        labelleft=False, left=False, right=True)
+    ax["bot"].yaxis.set_label_position("right")
 
     if "snr" in los:
         snr_idx = np.argmax(los.snr)

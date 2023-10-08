@@ -466,7 +466,7 @@ def main():
             results = executor.map(
                 partial(
                     call_fitting,wavelengths=wavelengths, max_depth=args.max_depth,
-                    niters=args.niters, phi_step=args.depth_step, derotate=opts.no_derotate), 
+                    niters=args.niters, phi_step=args.depth_step, derotate=args.no_derotate), 
                 xy)
     else:
         # test bedding
@@ -474,7 +474,7 @@ def main():
             results.append(call_fitting(_v, wavelengths=wavelengths,
                 max_depth=args.max_depth,
                     niters=args.niters, phi_step=args.depth_step,
-                    derotate=opts.no_derotate))
+                    derotate=args.no_derotate))
 
     
     results = list(results)

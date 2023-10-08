@@ -12,6 +12,12 @@ from astropy.io import fits
 from glob import glob
 from natsort import natsorted
 
+
+from utils.logger import logging, LOG_FORMATTER, setup_streamhandler
+snitch = logging.getLogger(__name__)
+snitch.addHandler(setup_streamhandler())
+snitch.setLevel("INFO")
+
 def read_fits(imname):
     outs = {}
     hdr = fits.getheader(imname)
@@ -20,7 +26,7 @@ def read_fits(imname):
             outs[_] = hdr[_] / 1e9
         else:    
             outs[_] = hdr[_]
-    print(f"Reading         :{imname}")
+    snitch.info(f"Reading         :{imname}")
     return outs
 
 
@@ -29,8 +35,8 @@ def read_cube_fits(imname, channels=None):
 
     with fits.open(imname) as hdul:
         if channels is not None:
-            print(f"Selecting {len(ps.channels)} channels out of {hdul[0].header['NAXIS3']}")
-            print(f"Channels: {channels}")
+            snitch.info(f"Selecting {len(ps.channels)} channels out of {hdul[0].header['NAXIS3']}")
+            snitch.info(f"Channels: {channels}")
             channels = np.array(channels)
             channels += 1
         else:
@@ -43,7 +49,7 @@ def read_cube_fits(imname, channels=None):
 
 
 def plotme(freqs, bmajs, bmins, outname, title="All freqs"):
-    print("Plotting beam dimensions")
+    snitch.info("Plotting beam dimensions")
     fig, ax = plt.subplots(figsize=(16,9), ncols=2, sharex=True)
     ax[0].plot(freqs, bmajs, "bo", markersize=4)
     ax[0].axhline(bmajs.max(), linestyle="--", linewidth=1)
@@ -78,12 +84,12 @@ def plotme(freqs, bmajs, bmins, outname, title="All freqs"):
     # ax[1].set_title(title)
 
     fig.tight_layout()
-    print(f"Saving file at: {outname}")
+    snitch.info(f"Saving file at: {outname}")
     fig.savefig(outname)
 
 
 def get_params(pairs):
-    print("Populating beam parameters for all images")
+    snitch.info("Populating beam parameters for all images")
     bmajs = np.array([_["BMAJ"] for _ in pairs])
     bmins = np.array([_["BMIN"] for _ in pairs])
     freqs = np.array([_["CRVAL3"] for _ in pairs])
@@ -92,7 +98,7 @@ def get_params(pairs):
 
 
 def get_and_plot_beam_info(indir=None, search="*[0-9]-I-image.fits", dump=".",
-    oname="beam_vs_freq.png"):
+    prefix=None, oname="beam_vs_freq.png"):
     """
     read file containing filenames for the images to be processed
     these are stored in e.g eds.txt
@@ -109,23 +115,19 @@ def get_and_plot_beam_info(indir=None, search="*[0-9]-I-image.fits", dump=".",
     # save this beam information into beams file
     np.savez(os.path.join(dump, "beams"), freqs=freqs, bmajs=bmajs, bmins=bmins)
 
-    oname = os.path.join(dump, oname)
+    oname = os.path.join(dump, oname if prefix is None else f"{prefix}-{oname}")
     plotme(freqs, bmajs, bmins, oname, title="All freqs")
 
     return
 
 
-def single_cube_file(cube_name, oname=None, channels=None):
-    ## in the case of multiple data cubes
-    pairs = read_cube_fits(cube_name, channels=channels)
-    bmajs, bmins, freqs = get_params(pairs)
-    if oname is None:
-        oname = f"bmaj-bmin-vs-freq-{cube_name}.png"
-    plotme(freqs, bmajs, bmins, oname, title="All freqs")
-
-
-
-
+# def single_cube_file(cube_name, oname=None, channels=None):
+#     ## in the case of multiple data cubes
+#     pairs = read_cube_fits(cube_name, channels=channels)
+#     bmajs, bmins, freqs = get_params(pairs)
+#     if oname is None:
+#         oname = f"bmaj-bmin-vs-freq-{cube_name}.png"
+#     plotme(freqs, bmajs, bmins, oname, title="All freqs")
 
 
 
@@ -137,7 +139,7 @@ def read_wsums(image):
     return hdr["WSCVWSUM"]
 
 
-def channel_selection(folder, dump, threshold=0.5):
+def channel_selection(folder, dump, threshold=0.5, autoselect=True, sel=None):
     """
     folder: str
         The directory containing your intended images
@@ -146,34 +148,61 @@ def channel_selection(folder, dump, threshold=0.5):
         which is normalised by the maximum available. This threshold is checked
         against the normalised wsum. Values below the threshold are ignored.
     """
-    print("Starting channel selection")
+    snitch.info("Starting channel selection")
 
     images = natsorted(glob(os.path.join(folder, "*[0-9]-I-image.fits")))
-    wsums = np.zeros(len(images))
+    owsums = np.zeros(len(images))
     for i, image in enumerate(images):
-        wsums[i] = read_wsums(image)
+        owsums[i] = read_wsums(image)
 
-    ONAME = os.path.join(dump, "wsums.txt")
-    print(f"Saving WSUMS to: {ONAME}")
-    np.savetxt(ONAME, wsums)
+    ONAME = os.path.join(dump, "orig-wsums.txt")
+    snitch.info(f"Saving WSUMS to: {ONAME}")
+    np.savetxt(ONAME, owsums)
 
-    wsums = np.round(wsums/wsums.max(), 2)
-    sel, = np.where(np.ma.masked_less_equal(wsums, 0.5).mask==False)
-    not_sel, = np.where(np.ma.masked_less_equal(wsums, 0.5).mask==True)
-    ONAME = os.path.join(dump, "not-selected-channels.txt")
-    print(f"Saving channel sel to: {ONAME}")
-    with open(ONAME, "w") as file:
-        file.writelines([f"{_}".zfill(4) + "\n" for _ in not_sel])
     
-    print(f"{sel.size} of {wsums.size} channels selected.")
-    ONAME = os.path.join(dump, "selected-channels.txt")
-    print(f"Saving channel sel to: {ONAME}")
-    with open(ONAME, "w") as file:
-        file.writelines([f"{_}".zfill(4) + "\n" for _ in sel])
+    if autoselect:
+        wsums = np.round(owsums/owsums.max(), 2)
+        not_sel, = np.where(np.ma.masked_less_equal(wsums, 0.5).mask==True)
+        ONAME = os.path.join(dump, "not-selected-channels.txt")
+        snitch.info(f"Saving channel not selected to: {ONAME}")
+        with open(ONAME, "w") as file:
+            file.writelines([f"{_}".zfill(4) + "\n" for _ in not_sel])
+
+        sel, = np.where(np.ma.masked_less_equal(wsums, 0.5).mask==False)
+        snitch.info(f"{sel.size} of {wsums.size} channels selected.")
+        ONAME = os.path.join(dump, "selected-channels.txt")
+        snitch.info(f"Saving channel sel to: {ONAME}")
+        with open(ONAME, "w") as file:
+            file.writelines([f"{_}".zfill(4) + "\n" for _ in sel])
+
+        ONAME = os.path.join(dump, "wsums.txt")
+        snitch.info(f"Saving WSUMS of selected channels to: {ONAME}")
+        np.savetxt(ONAME, owsums[sel])
+       
+
+    else:
+        snitch.info(f"Reading custom selected channel file: {sel}")
+        sel = np.loadtxt(sel)
+        not_sel = np.zeros(len(images))
+        not_sel[sel] = 1
+        not_sel, = np.where(not_sel==0)
+
+        ONAME = os.path.join(dump, "wsums.txt")
+        snitch.info(f"Saving WSUMS of selected channels to: {ONAME}")
+        np.savetxt(ONAME, owsums[sel])
+       
+
+        ONAME = os.path.join(dump, "not-selected-channels.txt")
+        snitch.info(f"Saving channel not selected to: {ONAME}")
+        with open(ONAME, "w") as file:
+            file.writelines([f"{_}".zfill(4) + "\n" for _ in not_sel])
+
+    
     return sel, not_sel
 
 
-def read_and_plot_beams2(folder, dump=".", beam_file="beams.npz", threshold=0.5):
+def read_and_plot_beams2(folder, dump=".", prefix=None, beam_file="beams.npz", threshold=0.5, 
+    sel=None, autoselect=True):
     """
     folder: str
         Where the input images are
@@ -181,12 +210,26 @@ def read_and_plot_beams2(folder, dump=".", beam_file="beams.npz", threshold=0.5)
         Where to dump the outputs
     """
     
-    sel, not_sel = channel_selection(folder, dump, threshold=threshold)
+    sel, not_sel = channel_selection(folder, dump, threshold=threshold,
+        sel=sel, autoselect=autoselect)
     
     chans = [f"{_}".zfill(4) for _ in sel]
     
     bm = dict(np.load(os.path.join(dump, beam_file)))
     bma, bmi, freqs = bm["bmajs"], bm["bmins"], bm["freqs"]
+
+    # write the largest beam available
+    ONAME = os.path.join(dump, "beam-dims.txt")
+    with open(ONAME, "w") as file:
+        file.write(f"{bma[sel[0]]}\n")
+        file.write(f"{bmi[sel[0]]}\n")
+        file.write(f"{freqs[sel[0]]}\n")
+
+
+    
+    ONAME = os.path.join(dump, "frequencies.txt")
+    snitch.info(f"Saving selected freqs : {ONAME}")
+    np.savetxt(ONAME, freqs[sel])
 
     # chans = np.arange(bma.size)
     freqs = np.arange(bma.size)
@@ -211,7 +254,10 @@ def read_and_plot_beams2(folder, dump=".", beam_file="beams.npz", threshold=0.5)
     # ax[0, 0].set_xlabel("Freq [GHz]")
     ax[0, 0].set_xlabel("Channel Number")
     
-    ONAME = os.path.join(dump, "selected_beam_vs_freq.png")
+    if prefix is None:
+        ONAME = os.path.join(dump, "selected_beam_vs_freq.png")
+    else:
+        ONAME = os.path.join(dump, f"{prefix}-selected_beam_vs_freq.png")
     fig.savefig(ONAME, bbox_inches="tight", dpi=300)
 
     return
@@ -242,19 +288,32 @@ def parser():
         help="""Channels with WSUM/WSUM.max() below this value will be excluded.
         Only used if -s is active"""
     )
+    ps.add_argument("-sc", "--select-channels", dest="sel", default=None,
+        type=str, help="Custom channel selections"
+        )
     ps.add_argument("-as", "--auto-select", action="store_true", dest="auto_select", 
         help="Try and suggest valid channels for selection. Use in conjuction with '-t'.")
-
+    ps.add_argument("-pre", "--prefix", type=str, default="00", 
+        help="Prefix to append on the output images")
     return ps
 
 
-if __name__ == "__main__":
+def main():
     ps = parser().parse_args()
 
     # get info about beams and plot them
     get_and_plot_beam_info(ps.idir, search=ps.search, dump=ps.output)
        
-
-    if ps.auto_select:
+    if ps.auto_select or ps.sel:
         read_and_plot_beams2(ps.idir, dump=ps.output, beam_file="beams.npz",
-            threshold=ps.threshold)
+            threshold=ps.threshold, sel=ps.sel, autoselect=ps.auto_select)
+
+
+def console():
+    """A console run entry point for setup.cfg"""
+    main()
+    snitch.info("Bye :D !")
+    
+
+if __name__ == "__main__":
+    console()
