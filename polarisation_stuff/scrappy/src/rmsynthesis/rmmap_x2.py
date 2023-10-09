@@ -411,6 +411,7 @@ def main():
         idata, ihdr = read_data(args.ifits) # run I-cube
         fp_data = (qdata/idata )+ 1j*(udata/idata)
         fp_data = np.abs(fp_data)
+        pdata = qdata/idata + (1j*udata/idata)
     else:
         pdata = qdata + 1j*udata
     

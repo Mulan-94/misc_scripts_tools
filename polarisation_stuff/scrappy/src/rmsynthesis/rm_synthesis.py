@@ -263,9 +263,9 @@ def write_out_rmsynthesis_data(data, idir, depth, odir=None):
     return ofile
 
 
-def plot_los_rmdata(los, los_rm, losdata_fname):
-    odir = os.path.dirname(losdata_fname) 
-    odir = make_out_dir(odir+"-plots")
+def plot_los_rmdata(los, los_rm, odir):
+    # odir = os.path.dirname(losdata_fname) 
+    # odir = make_out_dir(odir+"-plots")
     ofile = fullpath(odir, f"reg_{los.reg_num}")
     if los.tag is not None:
         ofile += f"-{los.tag}.png"
@@ -363,7 +363,7 @@ def plot_rmtf(los_rm, rmplot_name):
     fig.savefig(ofile, dpi=300)
     snitch.info(f"Saved RMTF plot to: {ofile}")
 
-def rm_and_plot(data_dir, opts=None, plot=True, odir=None):
+def rm_and_plot(data_dir, opts=None, plot=True, odir=None, plodir=None):
     los = read_los_data(data_dir)
     if los.lambda_sq is None:
         los.lambda_sq = lambda_sq(los.freqs, los.chan_width)
@@ -380,7 +380,7 @@ def rm_and_plot(data_dir, opts=None, plot=True, odir=None):
     
     #plotting everything
     if plot:
-        rmplot_name = plot_los_rmdata(los, rmout, losdata_fname)
+        rmplot_name = plot_los_rmdata(los, rmout, odir=plodir)
     else:
         rmplot_name = False
     return rmplot_name
@@ -399,21 +399,25 @@ def main():
             snitch.info("No los data files found")
             sys.exit()
 
-        plot = opts.plot
-
         odir = make_out_dir(opts.output_dir)
+
+        plot = opts.plot
+        if plot:
+            plodir = make_out_dir(opts.output_dir+"-plots")
+        else:
+            plodir=None
 
         if opts.debug:
             ##################################################
             # Debug things, do not delete!!
             ##################################################
             for data_file in data_files:
-                rm_and_plot(data_file, opts, plot=plot, odir=odir)
+                rm_and_plot(data_file, opts, plot=plot, odir=odir, plodir=plodir)
             
         else:
             with futures.ProcessPoolExecutor(max_workers=10) as executor:
                 results = list(executor.map(
-                    partial(rm_and_plot, opts=opts, plot=plot, odir=odir),
+                    partial(rm_and_plot, opts=opts, plot=plot, odir=odir, plodir=plodir),
                     data_files
                 ))       
 

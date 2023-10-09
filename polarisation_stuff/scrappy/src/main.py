@@ -38,11 +38,11 @@ with polarvis: https://github.com/Mulan-94/polarvis\n""" +
 
 def initialize():
     op_dir = os.path.join(os.path.dirname(__file__),  "..", "post")
-    work_dir = os.path.curdir
+    work_dir = os.path.abspath(os.path.curdir)
 
     for f in ["showrunner.sh", "env-vars"]:
-        print(f"Copying {f} to the current directory")
-
+        print(f"Copying:\n\t{os.path.join(op_dir, f)} \nto:\tthe {work_dir}")
+        os.symlink(os.path.join(op_dir, f), os.path.join(work_dir, f))
 
 def console():
     opts = parser().parse_args()

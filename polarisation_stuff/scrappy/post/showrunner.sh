@@ -444,7 +444,7 @@ main(){
         -rb $HOME/pica/reduction/experiments/emancipation/masks/important_regions/pica_region-for-mask.reg
         "
 
-    # # pass all the arguments between the quotes to this function
+    # pass all the arguments between the quotes to this function
     generateRmMap "
         -q $conv_cubes/q-conv-image-cube.fits
         -u $conv_cubes/u-conv-image-cube.fits
