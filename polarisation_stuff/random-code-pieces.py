@@ -330,8 +330,13 @@ def jy_per_beam_to_jy_per_arcsec2(imn):
 
     Beam.from_fits_header(imn)
     beam = Beam.from_fits_header(imn)
-    beam.sr.to(u.arcsec**2)
-    beam.sr.to(u.arcsec**2).value
+    print(beam.sr.to(u.arcsec**2))
+
+    """
+    to get values as jy/arcsec
+    Divide x / beam_in_arcsec
+    """
+    return beam.sr.to(u.arcsec**2).value
 
 
 
@@ -427,3 +432,86 @@ wlobe = os.path.join(os.environ["mask_dir"], "west-lobe.fits")
 
 image = "products/spi-fitting/spi-map.alpha.fits"
 image_err = "products/spi-fitting/spi-map.alpha_err.fits"
+
+
+
+
+
+###############-----------------------------------------------------------------
+# REad the HISTORY of an MS
+
+from casacore.tables import table
+def read_ms_history(ms_name):
+    print(f"REading MS:   {ms_name}")
+    with table(f"{ms_name}::HISTORY") as tb:
+        tb.getcol("MESSAGE")
+        with open("ms-history.txt", "w") as fil:
+            history = [f"{_}\n" if "taskname" not in _ else f"\n\n" + "#"*80 + f"\n\n{_}" for _ in tb.getcol("MESSAGE")]
+          
+            fil.writelines(history)
+    print("History written")
+    return
+
+
+
+###############-----------------------------------------------------------------
+
+def radio_power(z, freq, spi, flux):
+    """
+    Calculate radio power of a galaxy
+
+    # obtained from eq 13 of Boxelaar, Weeren, Botteon of halo-FDCA
+    # https://doi.org/10.1016/j.ascom.2021.100464
+    # https://ned.ipac.caltech.edu/Library/Distances/distintro.html#:~:text=Since%20the%20luminosity%20distance%20equals,or%2059%20Mpc%20(18%25).
+
+
+    Parameters
+    ----------
+    z: float
+        Redshift of the galaxy
+    spi: float
+        Spectral index
+    freq: float
+        Frequency in MHz which flux is at
+    flux: float
+        Flux in Jansky
+
+    Returns
+    -------
+    power: float
+        Radio power in W/Hz units
+    """
+
+
+    from astropy.cosmology import FlatLambdaCDM
+    from math import pi
+    import astropy.units as u
+
+
+    # set up the cosomological params: Hubble constant and matter 0.3
+    hubble_const = 70
+    cosmo = FlatLambdaCDM(H0=hubble_const, Om0=0.3)
+
+    linear_dist = (3e8* z)/hubble_const   # distance in kpc
+
+    # similar to cosmo.luminosity_distance(z)
+    luminosity_dist = cosmo.luminosity_distance(z)
+
+
+
+    power = (((4 * pi * (luminosity_dist**2)) / ((1 + z)**(1 + spi))) *\
+                     flux_density).to(u.W/u.Hz)
+
+    # this one below is from Boxelaar
+    # power2 = (4*pi*luminosity_dist**2. *((1.+z)**((-1.*spi) - 1.))* flux_density*((freq/freq)**spi)).to(u.W/u.Hz)
+
+    print(power)
+    return power.value
+
+
+# for example for Pictor A using robertson (1973) values
+radio_power(0.035, 408, -0.75, 135)
+
+
+
+###############-----------------------------------------------------------------
