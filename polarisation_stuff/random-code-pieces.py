@@ -515,3 +515,48 @@ radio_power(0.035, 408, -0.75, 135)
 
 
 ###############-----------------------------------------------------------------
+
+## Calculcat ethe number of beams inside a region area.
+
+from regions import Regions
+from astropy.wcs import WCS
+from astropy.io import fits
+
+from radio_beam import Beam
+import astropy.units as u
+
+"""
+1. REad the DS9 regions file
+2. Convert to pixels
+3. Get the area of the regions
+4. Get the beam's area
+5. Divide step 3 by step 4
+"""
+
+regs = Regions.read("masks/important_regions/spi-regions.reg", format="ds9")
+
+
+hdr = fits.getheader("products/spi-fitting/spi-map.alpha.fits")
+wcs = WCS(hdr)
+
+# drop extra wcs axes
+for i in range(2):
+    wcs = wcs.dropaxis(-1)
+
+beam = Beam.from_fits_header(hdr)
+beam_area =  beam.sr.to(u.arcsec**2).value
+
+for reg in regs:
+    area = reg.to_pixel(wcs).area
+    
+    print(regs.meta.get("text"))
+
+    # making the assumption that this area is in arsec^2 because
+    # regions documentation does not say anything
+    print("Area  : ", area)
+    print("Beams : ", area/beam_area)
+    print("------------")
+
+
+
+
